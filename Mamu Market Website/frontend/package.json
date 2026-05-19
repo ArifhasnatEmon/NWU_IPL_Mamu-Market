@@ -1,0 +1,37 @@
+{
+  "name": "mamu-market",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "types:sync": "supabase gen types typescript --project-id upuinxtfjgttxubcfxif > src/types/supabase.ts",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@emailjs/browser": "^4.4.1",
+    "@supabase/supabase-js": "^2.105.4",
+    "@tailwindcss/vite": "^4.2.0",
+    "motion": "^12.34.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-image-crop": "^11.0.10",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^6.30.3",
+    "recharts": "^3.8.0",
+    "tailwindcss": "^4.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "supabase": "^2.98.2",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^4.1.5"
+  }
+}

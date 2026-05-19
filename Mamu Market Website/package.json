@@ -1,0 +1,11 @@
+{
+  "name": "mamu-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Root command center for Mamu Market",
+  "scripts": {
+    "install:frontend": "npm install --prefix frontend",
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend"
+  }
+}
