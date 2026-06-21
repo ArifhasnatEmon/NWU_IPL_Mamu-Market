@@ -6,7 +6,7 @@ import ProductCard from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useSharedProducts, useSharedVendors } from '../../context/DataContext';
+import { useSharedProducts, useSharedVendors, useSharedSponsoredProducts } from '../../context/DataContext';
 
 import { useReviews } from '../../hooks/useReviews';
 import { supabase } from '../../lib/supabase';
@@ -32,6 +32,7 @@ const ProductDetailsView: React.FC<{
   const { reviews: allReviews, refreshReviews } = useReviews({ productId: product.id });
 
   const { vendors: fetchedVendors } = useSharedVendors();
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
 
   const resolvedVendorName = React.useMemo(() => {
     if (!product.vendorId) return product.vendor;
@@ -84,27 +85,30 @@ const ProductDetailsView: React.FC<{
 
   const dynamicRelated = approvedProducts
     .filter((p: Product) => p.category?.toLowerCase().replace(/\s+/g, '-') === product.categoryId && p.id !== product.id)
-    .map((p: Product) => ({
-      id: p.id,
-      name: p.productName || p.name || '',
-      price: Number(p.price) || 0,
-      originalPrice: Number(p.originalPrice) || Number(p.price) || 0,
-      image: p.mainImage || p.image || '',
-      images: [p.mainImage, p.extraImage1, p.extraImage2, p.extraImage3].filter(Boolean),
-      categoryId: p.category?.toLowerCase().replace(/\s+/g, '-') || 'general',
-      category: p.category || 'General',
-      subcategory: p.subcategory || '',
-      vendorId: p.vendorId,
-      rating: Number(p.rating) || 0,
-      reviewsCount: p.reviewsCount || 0,
-      isSale: p.isSale === true || (p.isSale as any) === 'true',
-      description: p.description || '',
-      colors: p.colors || [],
-      reviews: [],
-      vendor: p.vendor || 'Unknown',
-      isNew: p.isNew === true || (p.isNew as any) === 'true',
-      inStock: p.inStock !== false && (p.inStock as any) !== 'false',
-    }));
+    .map((p: Product) => {
+      const v = fetchedVendors.find(v => v.id === p.vendorId);
+      return {
+        id: p.id,
+        name: p.productName || p.name || '',
+        price: Number(p.price) || 0,
+        originalPrice: Number(p.originalPrice) || Number(p.price) || 0,
+        image: p.mainImage || p.image || '',
+        images: [p.mainImage, p.extraImage1, p.extraImage2, p.extraImage3].filter(Boolean),
+        categoryId: p.category?.toLowerCase().replace(/\s+/g, '-') || 'general',
+        category: p.category || 'General',
+        subcategory: p.subcategory || '',
+        vendorId: p.vendorId,
+        rating: Number(p.rating) || 0,
+        reviewsCount: p.reviewsCount || 0,
+        isSale: p.isSale === true || (p.isSale as any) === 'true',
+        description: p.description || '',
+        colors: p.colors || [],
+        reviews: [],
+        vendor: v?.storeName || v?.name || p.vendor || 'Unknown',
+        isNew: p.isNew === true || (p.isNew as any) === 'true',
+        inStock: p.inStock !== false && (p.inStock as any) !== 'false',
+      };
+    });
   const relatedProducts = dynamicRelated.slice(0, 4);
 
   const localVendor = fetchedVendors.find(u => u.id === product.vendorId);
@@ -324,7 +328,8 @@ const ProductDetailsView: React.FC<{
               const isOutOfStock = (product.inStock as any) === false || (product.inStock as any) === 'false' || product.stockStatus === 'out_of_stock' || product.stockStatus === 'discontinued';
               if (isOutOfStock) return null;
               
-              if (!(product.isNew || product.isSale || (product as any).dealType || (product as any).isSponsored)) return null;
+              const actuallySponsored = sponsoredProductIds.includes(product.id) || (product as any).isSponsored;
+              if (!(product.isNew || product.isSale || (product as any).dealType || actuallySponsored)) return null;
               
               return (
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -334,7 +339,7 @@ const ProductDetailsView: React.FC<{
                   {(product as any).dealType === 'weekly' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg shadow-sm bg-indigo-500 text-white flex items-center gap-1.5"><i className="fas fa-calendar-week"></i> Weekly</span>}
                   {(product as any).dealType === 'monthly' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg shadow-sm bg-emerald-500 text-white flex items-center gap-1.5"><i className="fas fa-calendar-alt"></i> Monthly</span>}
                   {(product as any).dealType === 'flash' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg shadow-sm bg-amber-500 text-white flex items-center gap-1.5"><i className="fas fa-fire"></i> Flash</span>}
-                  {(product as any).isSponsored && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg shadow-sm bg-gray-800 text-white flex items-center gap-1.5"><i className="fas fa-ad"></i> Sponsored</span>}
+                  {actuallySponsored && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg shadow-sm bg-amber-400 text-gray-900 flex items-center gap-1.5"><i className="fas fa-star text-[9px]"></i> Promoted</span>}
                 </div>
               );
             })()}
@@ -832,7 +837,7 @@ const ProductDetailsView: React.FC<{
       )}
 
       {productReportModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setProductReportModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-gray-900 mb-2">Report Product</h3>
             <p className="text-gray-400 font-medium text-sm mb-6">Why are you reporting this product?</p>
@@ -876,7 +881,7 @@ const ProductDetailsView: React.FC<{
         </div>
       )}
       {reportModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReportModal(null)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-gray-900 mb-2">Report Review</h3>
             <p className="text-gray-400 font-medium text-sm mb-6">Why are you reporting this review?</p>

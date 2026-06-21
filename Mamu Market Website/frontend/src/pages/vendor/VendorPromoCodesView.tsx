@@ -168,7 +168,7 @@ const VendorPromoCodesView: React.FC = () => {
       </div>
 
       {showPromoModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !isSubmittingPromo && setShowPromoModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[3rem] p-10 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-2xl font-black text-gray-900 mb-2">Request Store-Wide Promo</h3>
             <p className="text-sm font-bold text-gray-400 mb-8">Create a custom promo code that applies to all products in your store. Max 3 active codes allowed.</p>

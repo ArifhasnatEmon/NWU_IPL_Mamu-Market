@@ -60,6 +60,7 @@ const AdminDashboardView: React.FC = () => {
   const refreshData = async () => {
     // Refresh vendor requests first so we have fresh data
     await refreshRequests();
+    await rebuildData();
   };
 
   // Build admin data whenever requests or other dependencies update
@@ -113,7 +114,7 @@ const AdminDashboardView: React.FC = () => {
         approvedProducts = prods.filter(p => p.status === 'approved').map(mapProduct);
       }
 
-      const { data: upds, error: updErr } = await supabase.from('product_updates').select('*');
+      const { data: upds, error: updErr } = await supabase.from('product_updates').select('*').eq('status', 'pending');
       if (!updErr && upds) {
         pendingUpdates = upds.map(u => ({
           ...u,
@@ -274,19 +275,33 @@ const AdminDashboardView: React.FC = () => {
   const handleUpdateApproval = async (updateId: string, approve: boolean) => {
     try {
       const update = data.pendingUpdates.find((u: any) => u.id === updateId);
-      if (approve && update) {
-        // Apply changes
-        const { error: updateError } = await supabase.from('products').update(update.changes).eq('id', update.productId);
-        if (updateError) throw updateError;
-
-        await supabase.from('product_updates').update({ status: 'approved' }).eq('id', updateId);
-      } else if (update) {
-        await supabase.from('product_updates').update({ status: 'rejected' }).eq('id', updateId);
+      if (!update) {
+        setToast('Error: Update request not found in state.');
+        return;
       }
-      refreshData();
-    } catch (e) {
+
+      if (approve) {
+        // Apply changes to the product
+        const { error: updateError } = await supabase.from('products').update(update.changes).eq('id', update.productId);
+        
+        if (updateError) {
+          console.error('Product update failed:', updateError);
+          setToast(`Failed to apply changes: ${updateError.message || 'Database error'}`);
+          return; // Stop execution, do not mark as approved
+        }
+
+        const { error: statusErr } = await supabase.from('product_updates').update({ status: 'approved' }).eq('id', updateId);
+        if (statusErr) throw statusErr;
+      } else {
+        const { error: statusErr } = await supabase.from('product_updates').update({ status: 'rejected' }).eq('id', updateId);
+        if (statusErr) throw statusErr;
+      }
+      
+      setToast(approve ? 'Update approved successfully!' : 'Update rejected successfully.');
+      await refreshData();
+    } catch (e: any) {
       console.error('Update approval error:', e);
-      setToast('Error approving update.');
+      setToast(`Error approving update: ${e.message || 'Unknown error'}`);
     }
   };
 
@@ -448,7 +463,7 @@ const AdminDashboardView: React.FC = () => {
       setToast('Error revoking verification');
     }
   };
-  const tabs = ["Overview", "Vendor Approvals", "Product Approvals", "Verification Requests", "Remove Requests", "Store Requests", "Account Requests", "User Management", "Vendor Management", "Reviews & Reports", "Product Monitor", "Flash Deals", "Category Management", "Promo Codes", "Order Management", "Customer Tickets", "Vendor Tickets", "Monitored Chats"];
+  const tabs = ["Overview", "Vendor Approvals", "Product Approvals", "Verification Requests", "Remove Requests", "Store Requests", "Account Requests", "User Management", "Vendor Management", "Reviews & Reports", "Product Monitor", "Flash Deals", "Sponsored Picks", "Category Management", "Promo Codes", "Order Management", "Customer Tickets", "Vendor Tickets", "Monitored Chats"];
 
   let pendingCounts: Record<string, number> = {};
   try {
@@ -512,7 +527,7 @@ const AdminDashboardView: React.FC = () => {
               },
               {
                 label: 'Marketing',
-                items: ['Hero Banners', 'Top Ticker', 'Flash Deals'],
+                items: ['Hero Banners', 'Top Ticker', 'Flash Deals', 'Sponsored Picks'],
               },
               {
                 label: 'Finance',
@@ -536,6 +551,7 @@ const AdminDashboardView: React.FC = () => {
               'Vendor Management': 'fa-user-tie',
               'Reviews & Reports': 'fa-star',
               'Flash Deals': 'fa-bolt',
+              'Sponsored Picks': 'fa-star',
               'Hero Banners': 'fa-image',
               'Top Ticker': 'fa-bullhorn',
               'Promo Codes': 'fa-tag',
@@ -956,7 +972,7 @@ const AdminDashboardView: React.FC = () => {
       </div>
 
       {suspendModal && suspendTarget && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setSuspendModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-gray-900 mb-2">Suspend User</h3>
             <p className="text-gray-400 text-sm font-bold mb-8">{suspendTarget.name} — {suspendTarget.email}</p>
@@ -1006,7 +1022,7 @@ const AdminDashboardView: React.FC = () => {
         </div>
       )}
       {revokeModal && revokeTarget && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setRevokeModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-gray-900 mb-2">Revoke Verification</h3>
             <p className="text-gray-400 text-sm font-bold mb-8">{revokeTarget.name} — {revokeTarget.email}</p>

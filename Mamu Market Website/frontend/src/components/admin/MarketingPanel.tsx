@@ -4,6 +4,7 @@ import CategoryManagementTab from './marketing/CategoryManagementTab';
 import PromoCodesTab from './marketing/PromoCodesTab';
 import HeroBannersTab from './marketing/HeroBannersTab';
 import TopTickerTab from './marketing/TopTickerTab';
+import SponsoredPicksTab from './marketing/SponsoredPicksTab';
 
 interface MarketingPanelProps {
   activeTab: string;
@@ -23,6 +24,7 @@ const MarketingPanel: React.FC<MarketingPanelProps> = ({ activeTab, setToast, re
       {activeTab === 'Promo Codes' && <PromoCodesTab setToast={setToast} refreshData={refreshData} />}
       {activeTab === 'Hero Banners' && <HeroBannersTab setToast={setToast} />}
       {activeTab === 'Top Ticker' && <TopTickerTab setToast={setToast} />}
+      {activeTab === 'Sponsored Picks' && <SponsoredPicksTab setToast={setToast} />}
     </>
   );
 };

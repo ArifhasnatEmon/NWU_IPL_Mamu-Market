@@ -377,33 +377,85 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                           <div className="flex gap-1 mb-3">
                             <span className="text-xs font-bold text-gray-400">({group.changes.length} update request)</span>
                           </div>
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             {group.changes.map((c: ProductUpdate) => (
-                              <div key={c.id} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-                                <div className="flex items-center gap-3">
-                                  <span className="font-black text-brand-600 uppercase text-xs w-28 shrink-0">Updates</span>
-                                  <div className="flex-1 text-sm text-gray-600 flex flex-col gap-1">
-                                    {c.changes && Object.entries(c.changes).map(([k, v]) => (
-                                      <div key={k} className="flex gap-2 truncate text-xs">
-                                        <span className="font-bold text-gray-900">{k}:</span>
-                                        <span className="text-green-600 font-medium">{String(v).substring(0, 50)}</span>
-                                      </div>
-                                    ))}
+                              <div key={c.id} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-brand-400"></div>
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center">
+                                      <i className="fas fa-edit text-sm"></i>
+                                    </div>
+                                    <div>
+                                      <span className="font-black text-gray-900 block">Requested Changes</span>
+                                      <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Update Request</span>
+                                    </div>
                                   </div>
-                                  <div className="flex gap-2 ml-auto shrink-0">
-                                    <button onClick={() => handleUpdateApproval(c.id, true)} className="px-3 py-1 bg-green-500 text-white rounded-lg font-black text-xs hover:bg-green-600">
-                                      ✓
+                                  <div className="flex gap-2">
+                                    <button onClick={() => handleUpdateApproval(c.id, true)} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-black text-xs hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2">
+                                      <i className="fas fa-check"></i> Approve
                                     </button>
-                                    <button onClick={() => handleUpdateApproval(c.id, false)} className="px-3 py-1 bg-red-50 text-red-500 rounded-lg font-black text-xs hover:bg-red-100">
-                                      ✗
+                                    <button onClick={() => handleUpdateApproval(c.id, false)} className="px-4 py-2 bg-red-50 text-red-500 rounded-xl font-black text-xs hover:bg-red-100 transition-all flex items-center gap-2">
+                                      <i className="fas fa-times"></i> Reject
                                     </button>
                                   </div>
                                 </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                  {c.changes && Object.entries(c.changes).map(([k, v]) => {
+                                    // Skip empty changes or unchanged values
+                                    if (v === undefined || v === null || v === '') return null;
+                                    
+                                    const formattedKey = k.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                                    
+                                    const renderValue = (val: any) => {
+                                      if (k === 'colors' && Array.isArray(val)) {
+                                        return (
+                                          <div className="flex gap-2 flex-wrap mt-1">
+                                            {val.map((color: any, i: number) => (
+                                              <div key={i} className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-gray-100 shadow-sm">
+                                                <span className="w-3 h-3 rounded-full border border-gray-300" style={{ backgroundColor: color.value || color.hex }}></span>
+                                                <span className="text-[10px] font-bold text-gray-600">{color.name}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      }
+                                      if (Array.isArray(val)) {
+                                        if (k === 'images' || k.includes('image')) {
+                                          return (
+                                            <div className="flex gap-2 flex-wrap mt-1">
+                                              {val.map((img: string, i: number) => (
+                                                <img key={i} src={img} className="w-12 h-12 rounded-lg object-cover border border-gray-200" alt="product" />
+                                              ))}
+                                            </div>
+                                          );
+                                        }
+                                        return <span className="text-sm text-gray-900 font-medium break-all">{val.join(', ')}</span>;
+                                      }
+                                      if (typeof val === 'string' && val.startsWith('data:image')) {
+                                        return <img src={val} className="w-12 h-12 rounded-lg object-cover border border-gray-200 mt-1" alt="product" />;
+                                      }
+                                      if (typeof val === 'string' && val.startsWith('http')) {
+                                        return <img src={val} className="w-12 h-12 rounded-lg object-cover border border-gray-200 mt-1" alt="product" />;
+                                      }
+                                      return <span className="text-sm text-gray-900 font-medium break-words leading-snug">{String(val)}</span>;
+                                    };
+
+                                    return (
+                                      <div key={k} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                        <span className="text-[10px] font-black uppercase text-gray-400 block mb-1.5 tracking-wider">{formattedKey}</span>
+                                        {renderValue(v)}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
                                 {c.reason && c.reason !== 'No reason provided' && (
-                                  <p className="text-xs text-gray-500 font-medium mt-2">
-                                    <i className="fas fa-comment-alt mr-1 text-gray-300"></i>
-                                    {c.reason}
-                                  </p>
+                                  <div className="mt-4 bg-blue-50 rounded-xl p-3 border border-blue-100 flex items-start gap-2">
+                                    <i className="fas fa-comment-alt text-blue-300 mt-0.5 text-sm"></i>
+                                    <p className="text-xs text-blue-700 font-medium">{c.reason}</p>
+                                  </div>
                                 )}
                               </div>
                             ))}
@@ -672,7 +724,7 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
             </div>
           )}
       {rejectModal && rejectTarget && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setRejectModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-10 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-xl font-black text-gray-900 mb-2">Reject Product</h3>
             <p className="text-gray-400 text-sm font-bold mb-8">{rejectTarget.productName} — by {rejectTarget.vendorName}</p>

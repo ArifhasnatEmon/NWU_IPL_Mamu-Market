@@ -4,6 +4,7 @@ import { CATEGORIES, getCategoryName } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useApp } from '../context/AppContext';
+import { useSharedProducts } from '../context/DataContext';
 import { useProduct } from '../hooks/useProducts';
 import { useCategories } from '../hooks/useSecondary';
 import { Product } from '../types';
@@ -122,13 +123,17 @@ const ProtectedAdminRoute = ({ children }: { children: React.ReactNode }) => {
 // ─── Wrapper components ───
 const ProductDetailsViewWrapper: React.FC = () => {
   const { id } = useParams();
-  const { product, loading } = useProduct(id);
+  const { products: approvedProducts } = useSharedProducts();
+  const cachedProduct = approvedProducts.find(p => p.id === id);
+  const { product, loading } = useProduct(!cachedProduct ? id : undefined);
 
-  if (loading) return <FullScreenLoader />;
-  if (!product) return <Navigate to="/products" replace />;
+  const finalProduct = cachedProduct || product;
+
+  if (!finalProduct && loading) return <FullScreenLoader />;
+  if (!finalProduct) return <Navigate to="/products" replace />;
 
   return (
-    <ProductDetailsView product={product} />
+    <ProductDetailsView product={finalProduct} />
   );
 };
 

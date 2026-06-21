@@ -6,7 +6,7 @@ import { Product } from '../../types';
 import ProductCard from '../../components/product/ProductCard';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useSharedProducts } from '../../context/DataContext';
+import { useSharedProducts, useSharedSponsoredProducts } from '../../context/DataContext';
 import PageTitle from '../../components/PageTitle';
 
 
@@ -15,6 +15,7 @@ const DealsView: React.FC = () => {
   const { handleAddToCart } = useCart();
   const { wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
   const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
 
   const onSelectDealType = (type: string) => {
     navigate(`/deals/${type}`);
@@ -117,7 +118,14 @@ const DealsView: React.FC = () => {
       if (type === 'daily') return p.dealType === 'flash' || p.dealType === 'daily' || (p.isSale && (!p.dealType || p.dealType === 'none'));
       return (p as any).dealType === type;
     });
-    return [...regular].slice(0, 5);
+    // Sort sponsored products first
+    return [...regular].sort((a, b) => {
+      const aSponsored = sponsoredProductIds.includes(a.id);
+      const bSponsored = sponsoredProductIds.includes(b.id);
+      if (aSponsored && !bSponsored) return -1;
+      if (!aSponsored && bSponsored) return 1;
+      return 0;
+    }).slice(0, 5);
   };
   return (
     <div className="container mx-auto px-4 py-20">

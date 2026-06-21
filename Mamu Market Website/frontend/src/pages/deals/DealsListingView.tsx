@@ -9,7 +9,8 @@ import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
-import { useSharedProducts } from '../../context/DataContext';
+import { useSharedProducts, useSharedSponsoredProducts } from '../../context/DataContext';
+import { useGlobalSettings } from '../../hooks/useMarketing';
 
 const DealsListingView: React.FC<{
   dealType: 'daily' | 'weekly' | 'monthly' | 'flash'
@@ -18,6 +19,8 @@ const DealsListingView: React.FC<{
   const { handleAddToCart } = useCart();
   const { wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
   const { products: dynamicProducts } = useSharedProducts();
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
+  const { setting: flashPinned } = useGlobalSettings('flash_pinned_products');
   const [timeLeft, setTimeLeft] = React.useState({ d: 0, h: 0, m: 0, s: 0, expired: true });
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -126,13 +129,29 @@ const DealsListingView: React.FC<{
 
   if (dealType === 'daily' || dealType === 'flash') {
     // Flash/Daily rules
-    displayProducts = allProducts.filter(p => {
+    let baseProducts = allProducts.filter(p => {
       const dt = p.dealType;
       if (dt === 'flash' || dt === 'daily') return true;
       // Backwards compat
       if ((p.isSale === true) && (!dt || dt === 'none' || dt === undefined)) return true;
       return false;
     });
+
+    // Extract pinned IDs with expiry check
+    const nowTime = Date.now();
+    type PinnedItem = string | { id: string; pinnedAt: string };
+    const rawPinned: PinnedItem[] = (flashPinned as PinnedItem[]) || [];
+    const pinnedIds: string[] = rawPinned.map((x: PinnedItem) =>
+      typeof x === 'string' ? x : x.id
+    ).filter((id: string) => {
+      const item = rawPinned.find((x: PinnedItem) => (typeof x === 'string' ? x : x.id) === id);
+      if (!item || typeof item === 'string') return true;
+      return (nowTime - new Date(item.pinnedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
+    });
+
+    // explicitly include pinned flash items
+    const pinnedProducts = pinnedIds.map(id => allProducts.find(p => p.id === id)).filter(Boolean) as Product[];
+    displayProducts = [...pinnedProducts, ...baseProducts].filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i); // deduplicate
   } else if (dealType === 'weekly') {
     // Weekly rules
     displayProducts = allProducts.filter(p => (p as any).dealType === 'weekly');
@@ -143,11 +162,14 @@ const DealsListingView: React.FC<{
     displayProducts = allProducts.filter(p => p.isSale === true);
   }
 
-  // Inject sponsors
-  // Sponsor keys
-  displayProducts = [
-    ...displayProducts
-  ];
+  // Sort sponsored products first
+  displayProducts = [...displayProducts].sort((a, b) => {
+    const aSponsored = sponsoredProductIds.includes(a.id);
+    const bSponsored = sponsoredProductIds.includes(b.id);
+    if (aSponsored && !bSponsored) return -1;
+    if (!aSponsored && bSponsored) return 1;
+    return 0;
+  });
 
   return (
     <div className="container mx-auto px-4 py-12">

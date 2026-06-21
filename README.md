@@ -56,19 +56,7 @@ Mamu Market is a modern, high-performance **Multi-Vendor E-Commerce Platform** b
    npm install
    ```
 
-2. **Set up Environment Variables**
-   Create a `.env` file in the `frontend` directory and add your credentials:
-   ```env
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   
-   # EmailJS Configuration
-   VITE_EMAILJS_SERVICE_ID=your_service_id
-   VITE_EMAILJS_TEMPLATE_ID_STATUS=your_status_template
-   VITE_EMAILJS_PUBLIC_KEY=your_public_key
-   ```
-
-3. **Start the Development Server**
+2. **Start the Development Server**
    ```bash
    npm run dev
    ```

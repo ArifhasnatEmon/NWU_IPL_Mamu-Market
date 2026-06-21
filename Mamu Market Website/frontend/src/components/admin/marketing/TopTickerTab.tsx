@@ -9,6 +9,7 @@ interface TopTickerTabProps {
 interface TickerMessage {
   text: string;
   expiresAt: string | null;
+  isSponsored?: boolean;
 }
 
 const TopTickerTab: React.FC<TopTickerTabProps> = ({ setToast }) => {
@@ -28,14 +29,14 @@ const TopTickerTab: React.FC<TopTickerTabProps> = ({ setToast }) => {
     if (tickerSettings && Array.isArray(tickerSettings.messages)) {
       // Backward compatible: convert old string[] format to new object format
       const msgs = tickerSettings.messages.map((m: any) => {
-        if (typeof m === 'string') return { text: m, expiresAt: null };
-        return { text: m.text || '', expiresAt: m.expiresAt || null };
+        if (typeof m === 'string') return { text: m, expiresAt: null, isSponsored: false };
+        return { text: m.text || '', expiresAt: m.expiresAt || null, isSponsored: m.isSponsored || false };
       });
       setMessages(msgs);
     } else {
       setMessages([
-        { text: '🎉 Welcome to Mamu Market!', expiresAt: null },
-        { text: '🚚 Free shipping on orders over ৳10000', expiresAt: null }
+        { text: '🎉 Welcome to Mamu Market!', expiresAt: null, isSponsored: false },
+        { text: '🚚 Free shipping on orders over ৳10000', expiresAt: null, isSponsored: false }
       ]);
     }
   }, [tickerSettings]);
@@ -50,7 +51,7 @@ const TopTickerTab: React.FC<TopTickerTabProps> = ({ setToast }) => {
   };
 
   const handleAddMessage = () => {
-    setMessages([...messages, { text: 'New announcement message', expiresAt: null }]);
+    setMessages([...messages, { text: 'New announcement message', expiresAt: null, isSponsored: false }]);
   };
 
   const handleRemoveMessage = (index: number) => {
@@ -103,13 +104,30 @@ const TopTickerTab: React.FC<TopTickerTabProps> = ({ setToast }) => {
           const timeLeft = getTimeLeft(msg.expiresAt);
           return (
             <div key={index} className={`bg-white p-4 rounded-2xl border shadow-sm ${timeLeft === 'Expired' ? 'border-red-200 opacity-60' : 'border-gray-100'}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Message {index + 1}</span>
-                {timeLeft && (
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${timeLeft === 'Expired' ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                    ⏳ {timeLeft}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Message {index + 1}</span>
+                  {timeLeft && (
+                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${timeLeft === 'Expired' ? 'bg-red-100 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                      ⏳ {timeLeft}
+                    </span>
+                  )}
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={msg.isSponsored || false}
+                    onChange={(e) => {
+                      const newMsgs = [...messages];
+                      newMsgs[index] = { ...newMsgs[index], isSponsored: e.target.checked };
+                      setMessages(newMsgs);
+                    }}
+                    className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-gray-300"
+                  />
+                  <span className="text-xs font-bold text-gray-600 group-hover:text-brand-600 transition-colors flex items-center gap-1">
+                    <i className="fas fa-star text-amber-400"></i> Mark as Sponsored
                   </span>
-                )}
+                </label>
               </div>
 
               <div className="flex gap-3 mb-3">

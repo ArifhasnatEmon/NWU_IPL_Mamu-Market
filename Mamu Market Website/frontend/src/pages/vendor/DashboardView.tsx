@@ -319,6 +319,36 @@ const DashboardView: React.FC = () => {
           </div>
         </div>
 
+        {/* Promotion Glassmorphic Banner */}
+        <div className="mb-16 p-8 rounded-[2rem] bg-gradient-to-br from-brand-600/5 to-purple-600/5 border border-white/60 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative overflow-hidden group transition-all hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]">
+          <div className="absolute inset-0 bg-white/40 group-hover:bg-white/50 transition-colors"></div>
+          
+          {/* Decorative shapes */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-brand-600/20 rounded-full blur-3xl group-hover:bg-brand-600/30 transition-colors"></div>
+          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl group-hover:bg-purple-600/30 transition-colors"></div>
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-6 text-center md:text-left">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-600 to-purple-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-brand-600/30 shrink-0 transform group-hover:scale-110 transition-transform duration-300">
+                <i className="fas fa-bullhorn"></i>
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Want to boost your sales?</h3>
+                <p className="text-gray-600 font-medium">Feature your top products on the homepage or top ticker to reach more customers instantly.</p>
+              </div>
+            </div>
+            <div className="text-center md:text-right shrink-0">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">For promotion contact</p>
+              <a href="mailto:admin.mamumarket@gmail.com" className="inline-flex items-center gap-3 px-6 py-3 bg-white/80 border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-brand-600 transition-all group-hover:-translate-y-1">
+                <div className="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <i className="fas fa-envelope"></i>
+                </div>
+                <span className="font-bold text-gray-900">admin.mamumarket@gmail.com</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
           {(() => {
             const storedUserId = user?.id;
@@ -490,11 +520,13 @@ const DashboardView: React.FC = () => {
                 color: p.status === 'rejected' ? 'red' : p.status === 'approved' ? 'green' : 'amber',
                 reason: p.status, date: p.status
               })),
-              ...activeUpdates.map((u: ProductUpdate) => ({
+              ...pendingUpdates.map((u: ProductUpdate) => ({
                 uid: `upd-${u.id}`,
                 id: u.id, title: myProducts.find(p => p.id === u.productId)?.name || 'Unknown Product', subtitle: `Changes requested`,
                 type: 'Product Update', image: null,
-                status: 'PENDING', color: 'blue', reason: null, date: u.date
+                status: u.status === 'approved' ? 'APPROVED' : u.status === 'rejected' ? 'REJECTED' : 'PENDING',
+                color: u.status === 'approved' ? 'green' : u.status === 'rejected' ? 'red' : 'blue',
+                reason: u.reason || null, date: u.date
               })),
               ...removeRequests.map(r => ({
                 uid: `rem-${r.id}`,
@@ -596,9 +628,14 @@ const DashboardView: React.FC = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-[3rem] p-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-2xl font-black text-gray-900 mb-8">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] p-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-2xl font-black text-gray-900">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
+              <button onClick={() => setShowModal(false)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all">
+                <i className="fas fa-times text-gray-600"></i>
+              </button>
+            </div>
             <div className="space-y-6">
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Product Name</label>
@@ -810,7 +847,7 @@ const DashboardView: React.FC = () => {
 
 
       {deleteModal && deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDeleteModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6">
               <i className="fas fa-trash text-xl"></i>

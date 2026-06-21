@@ -58,7 +58,7 @@ const TopVendorsView: React.FC = () => {
                 </div>
                 <span className="text-sm font-black text-gray-900">{vendor.rating}</span>
               </div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{vendor.productsCount} Products • Joined {vendor.joinedDate}</p>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{vendor.productsCount} Products • Joined {new Date(vendor.joinedDate || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             </div>
             <button 
               onClick={() => navigateToVendor(vendor)}

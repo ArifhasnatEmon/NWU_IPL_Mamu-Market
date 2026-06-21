@@ -51,6 +51,7 @@ const VendorInventoryView: React.FC = () => {
 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [initialFormState, setInitialFormState] = useState<Record<string, string>>({});
   const mainImgRef = useRef<HTMLInputElement>(null);
   const extra1Ref = useRef<HTMLInputElement>(null);
   const extra2Ref = useRef<HTMLInputElement>(null);
@@ -58,13 +59,14 @@ const VendorInventoryView: React.FC = () => {
 
   const openEdit = (p: Product) => {
     setEditingProduct(p);
-    setForm({
-      productName: p.productName || '',
+    const initial = {
+      productName: p.productName || p.name || '',
       price: String(p.price || ''),
       originalPrice: String(p.originalPrice || p.price || ''),
       units: String(p.units || p.stock || 0),
       stockStatus: p.stockStatus || 'in_stock',
       dealType: p.dealType || (p.isSale ? 'flash' : 'none'),
+      shortDescription: p.shortDescription || '',
       description: p.description || '',
       warranty: p.shippingReturnPolicy?.match(/Product Warranty:\s*(.*)/)?.[1] || '',
       guarantee: p.shippingReturnPolicy?.match(/Product Guarantee:\s*(.*)/)?.[1] || '',
@@ -86,7 +88,9 @@ const VendorInventoryView: React.FC = () => {
       color4name: p.colors?.[3]?.name || '',
       color4hex: p.colors?.[3]?.value || '#000000',
       color4image: p.colors?.[3]?.image || '',
-    });
+    };
+    setForm(initial);
+    setInitialFormState(initial);
   };
 
   const toBase64 = (file: File): Promise<string> =>
@@ -134,15 +138,64 @@ const VendorInventoryView: React.FC = () => {
         colors: colors,
       };
 
-      const { error } = await supabase.from('product_updates').insert({
-        product_id: editingProduct.id,
-        vendor_id: editingProduct.vendorId,
-        changes: changes,
-        status: 'pending'
-      });
+      // 1. Instant update to products table
+      const instantChangesDb = {
+        units: Number(form.units),
+        stock: Number(form.units),
+        stock_status: form.stockStatus,
+        deal_type: form.dealType,
+      };
+
+      const { error: instantError } = await supabase
+        .from('products')
+        .update(instantChangesDb)
+        .eq('id', editingProduct.id);
       
-      if (error) throw error;
-      setToast('Update submitted successfully for admin approval!');
+      if (instantError) throw instantError;
+
+      // 2. Check if there are approval changes
+      let hasApprovalChanges = false;
+      const approvalFields = Object.keys(form).filter(k => !['units', 'stockStatus', 'dealType'].includes(k));
+      for (const key of approvalFields) {
+        if (form[key] !== initialFormState[key]) {
+          hasApprovalChanges = true;
+          break;
+        }
+      }
+
+      if (hasApprovalChanges) {
+        // check if a pending update already exists
+        const { data: existingPending } = await supabase
+          .from('product_updates')
+          .select('id')
+          .eq('product_id', editingProduct.id)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+        if (existingPending) {
+          // update existing request
+          const { error: updateApprovalErr } = await supabase
+            .from('product_updates')
+            .update({ changes })
+            .eq('id', existingPending.id);
+          if (updateApprovalErr) throw updateApprovalErr;
+        } else {
+          // insert new request
+          const { error: insertApprovalErr } = await supabase
+            .from('product_updates')
+            .insert({
+              product_id: editingProduct.id,
+              vendor_id: editingProduct.vendorId,
+              changes: changes,
+              status: 'pending'
+            });
+          if (insertApprovalErr) throw insertApprovalErr;
+        }
+        setToast('Instant changes saved. Other updates submitted for admin approval!');
+      } else {
+        setToast('Changes saved successfully!');
+      }
+      
       setEditingProduct(null);
     } catch(err: any) {
       console.error(err);
@@ -242,8 +295,8 @@ const VendorInventoryView: React.FC = () => {
 
       {/* Edit Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditingProduct(null)}>
-          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" onClick={e => e.stopPropagation()}>
             <div className="p-8">
               <div className="flex items-center justify-between mb-8">
                 <h2 className="text-2xl font-black text-gray-900">Edit Product</h2>

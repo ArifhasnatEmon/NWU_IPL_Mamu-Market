@@ -6,7 +6,7 @@ import { Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useSharedProducts } from '../../context/DataContext';
+import { useSharedProducts, useSharedSponsoredProducts } from '../../context/DataContext';
 import { useGlobalSettings } from '../../hooks/useMarketing';
 
 const FlashSaleSection: React.FC = () => {
@@ -15,6 +15,7 @@ const FlashSaleSection: React.FC = () => {
   const { handleAddToCart } = useCart();
   const { setSelectedFilter, handleSelectProduct } = useApp();
   const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
   const userRole = user?.role;
   const { setting: flashPinned } = useGlobalSettings('flash_pinned_products');
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: true });
@@ -97,8 +98,15 @@ const FlashSaleSection: React.FC = () => {
       return scoreB - scoreA;
     });
 
-  const flashProducts = [...automatedFlash, ...pinnedProducts]
+  const flashProducts = [...pinnedProducts, ...automatedFlash]
     .filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i) // deduplicate
+    .sort((a, b) => {
+      const aSponsored = sponsoredProductIds.includes(a.id);
+      const bSponsored = sponsoredProductIds.includes(b.id);
+      if (aSponsored && !bSponsored) return -1;
+      if (!aSponsored && bSponsored) return 1;
+      return 0;
+    })
     .slice(0, 3);
 
 
@@ -166,11 +174,12 @@ const FlashSaleSection: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {flashProducts.map((p) => {
                   const discount = Math.round((1 - p.price / p.originalPrice) * 100);
+                  const isSponsored = sponsoredProductIds.includes(p.id);
                   return (
                     <motion.div
                       key={p.id}
                       whileHover={{ y: -5 }}
-                      className="bg-white/10 border border-white/10 rounded-[1.5rem] p-3 flex flex-col group/card shadow-lg hover:shadow-2xl transition-all duration-300"
+                      className={`bg-white/10 rounded-[1.5rem] p-3 flex flex-col group/card shadow-lg hover:shadow-2xl transition-all duration-300 ${isSponsored ? 'border-2 border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.15)]' : 'border border-white/10'}`}
                     >
                       <div className="relative aspect-square rounded-xl overflow-hidden bg-white/5 mb-3 cursor-pointer" onClick={() => handleSelectProduct(p)}>
                         <img src={p.image || 'https://via.placeholder.com/400x400?text=Product'} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover/card:scale-110 transition-transform duration-700" alt={p.name} />
