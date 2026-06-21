@@ -1,7 +1,5 @@
 # 🛒 Mamu Market
 
-![Mamu Market Banner](https://via.placeholder.com/1200x400/111827/FFFFFF?text=Mamu+Market+-+Multi-Vendor+E-Commerce+Platform)
-
 Mamu Market is a modern, high-performance **Multi-Vendor E-Commerce Platform** built for scale and aesthetic appeal. Featuring a cutting-edge tech stack, the platform offers a seamless shopping experience for customers, robust store management for vendors, and comprehensive oversight tools for platform administrators.
 
 ---
