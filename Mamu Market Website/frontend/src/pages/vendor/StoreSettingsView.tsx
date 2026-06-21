@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ImageCropperModal from '../../components/ui/ImageCropperModal';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
-import { useCategories } from '../../hooks/useSecondary';
+import { useSharedCategories } from '../../context/DataContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import { uploadImage } from '../../utils/imageUpload';
 import { Category } from '../../types';
@@ -20,6 +21,7 @@ const StoreSettingsView: React.FC = () => {
   const [storeDescription, setStoreDescription] = useState(user?.storeDescription || '');
   const [banner, setBanner] = useState(user?.banner || '');
   const [nidTradeLicense, setNidTradeLicense] = useState(user?.nidTradeLicense || '');
+  const [saving, setSaving] = useState(false);
 
   const [categoryModal, setCategoryModal] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -29,7 +31,7 @@ const StoreSettingsView: React.FC = () => {
   const [removeReason, setRemoveReason] = useState('');
   const [categoryMode, setCategoryMode] = useState<'existing' | 'custom'>('existing');
 
-  const { categories: customCategories } = useCategories();
+  const { categories: customCategories } = useSharedCategories();
 
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const [bannerUpImg, setBannerUpImg] = useState<string | ArrayBuffer | null>(null);
@@ -49,53 +51,133 @@ const StoreSettingsView: React.FC = () => {
   const approvedCategoryRequests = requests
     .filter(r => r.request_type === 'category_add' && r.status === 'approved')
     .map(r => r.requested_value);
-  const vendorCategories = [...new Set([...vendorCats, ...approvedCategoryRequests])].filter(Boolean);
+  // Only exclude a category if its most recent approved removal is NEWER than its most recent approved add
+  const isEffectivelyRemoved = (catName: string) => {
+    const catLower = catName.toLowerCase();
+    const latestRemoval = requests
+      .filter(r => r.request_type === 'category_remove' && r.status === 'approved' && (r.current_value || '').toLowerCase() === catLower)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (!latestRemoval) return false;
+    const latestAdd = requests
+      .filter(r => r.request_type === 'category_add' && r.status === 'approved' && (r.requested_value || '').toLowerCase() === catLower)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (!latestAdd) return true; // removed and never re-added
+    return new Date(latestRemoval.created_at).getTime() > new Date(latestAdd.created_at).getTime();
+  };
+  const vendorCategories = [...new Set([...vendorCats, ...approvedCategoryRequests])]
+    .filter(Boolean)
+    .filter(cat => !isEffectivelyRemoved(cat));
+
+  // Helper: check if a pending request of a given type already exists (prevents duplicate submissions)
+  const hasPendingRequest = (type: string, extraCheck?: (r: any) => boolean) => {
+    return requests.some(r => r.request_type === type && r.status === 'pending' && (extraCheck ? extraCheck(r) : true));
+  };
 
   const handleSaveStore = async () => {
     if (!user) return;
+    if (saving) return; // Prevent double-clicks
+    setSaving(true);
 
-    // Name Change Request
-    if (storeName !== (user.storeName || user.name)) {
-      await submitRequest('store_name', user.storeName || user.name || '', storeName, 'Store name change');
-      setToast('Store name change request sent to admin');
-    }
-
-    // Upload Banner
-    const bannerUrl = await uploadImage(banner, 'store-assets');
-
-    // Update other fields directly
-    if (user?.id) {
-      const { error } = await supabase.from('profiles').update({
-        store_description: storeDescription,
-        store_city: storeCity,
-        banner: bannerUrl || undefined
-      }).eq('id', user.id);
-      
-      if (error) {
-        setToast('Failed to update settings: ' + error.message);
-        return;
+    try {
+      // Name Change Request
+      if (storeName !== (user.storeName || user.name)) {
+        if (hasPendingRequest('store_name')) {
+          setToast('A store name change request is already pending. Please wait for admin review.');
+        } else {
+          await submitRequest('store_name', user.storeName || user.name || '', storeName, 'Store name change');
+          setToast('Store name change request sent to admin');
+        }
       }
+
+      // Upload Banner (only if it's a new blob/base64, otherwise returns the URL as-is)
+      let bannerUrl = banner;
+      if (banner && (banner.startsWith('data:image') || banner.startsWith('blob:'))) {
+        bannerUrl = await uploadImage(banner, 'store-assets');
+      }
+
+      // Update other fields directly
+      if (user?.id) {
+        // Build the update payload — explicitly include banner even when empty (vendor removed it)
+        const updatePayload: Record<string, any> = {
+          store_description: storeDescription,
+          store_city: storeCity,
+        };
+        // Always include banner in the update: empty string means vendor removed it, otherwise use the uploaded URL
+        if (bannerUrl) {
+          updatePayload.banner = bannerUrl;
+        } else {
+          updatePayload.banner = null; // Explicitly clear banner when removed
+        }
+
+        const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
+        
+        if (error) {
+          setToast('Failed to update settings: ' + error.message);
+          return;
+        }
+
+        // Update the context so the frontend shows the new changes instantly
+        setUser({
+          ...user,
+          storeDescription,
+          storeCity,
+          banner: bannerUrl || ''
+        });
+      }
+      setToast('Store settings updated');
+    } catch (err) {
+      console.error('handleSaveStore error:', err);
+      setToast('Something went wrong. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    setToast('Store settings updated');
   };
 
   const handleVerificationRequest = async () => {
     if (!nidTradeLicense) { setToast('Please enter NID/Trade License number'); return; }
+    if (hasPendingRequest('verification')) {
+      setToast('A verification request is already pending. Please wait for admin review.');
+      return;
+    }
     await submitRequest('verification', undefined, nidTradeLicense, 'Store Verification');
     setToast('Verification request sent to admin');
   };
 
+  // Count categories: current + pending approved requests toward the 2-category cap
+  const pendingCategoryAdds = requests.filter(r => r.request_type === 'category_add' && r.status === 'pending').length;
+  const totalCategorySlots = vendorCategories.length + pendingCategoryAdds;
+  const MAX_CATEGORIES = 2;
+
   const handleCategoryRequest = async () => {
     if (!newCategory || !categoryReason) { setToast('Please fill all fields'); return; }
-    await submitRequest('category_add', undefined, newCategory, categoryReason);
+
+    const requestType = categoryMode === 'existing' ? 'category_add' : 'category_suggest';
+    const dupType = requestType;
+    if (hasPendingRequest(dupType, r => r.requested_value === newCategory)) {
+      setToast(`A request for "${newCategory}" is already pending. Please wait for admin review.`);
+      return;
+    }
+
+    // Enforce 2-category cap only for actual category additions (not suggestions)
+    if (categoryMode === 'existing' && totalCategorySlots >= MAX_CATEGORIES) {
+      setToast(`You can have a maximum of ${MAX_CATEGORIES} categories. Remove one first to request a new one.`);
+      return;
+    }
+
+    await submitRequest(requestType, categoryMode, newCategory, categoryReason);
     setCategoryModal(false);
     setNewCategory('');
     setCategoryReason('');
-    setToast('Category request sent to admin');
+    setToast(categoryMode === 'existing' ? 'Category request sent to admin' : 'Category suggestion sent to admin');
   };
 
   const confirmRemove = async () => {
     if (!removeReason) { setToast('Please select a reason'); return; }
+    if (hasPendingRequest('category_remove', r => r.current_value === removeCat)) {
+      setToast(`A removal request for "${removeCat}" is already pending. Please wait for admin review.`);
+      setRemoveModal(false);
+      return;
+    }
     await submitRequest('category_remove', removeCat, undefined, removeReason);
     setToast('Category removal request sent to admin!');
     setRemoveModal(false);
@@ -104,7 +186,8 @@ const StoreSettingsView: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-20">
+    <div className="container mx-auto px-4 py-20 font-sans">
+      <PageTitle title="Store Settings" />
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-black text-gray-900">Store Settings</h1>
@@ -179,7 +262,7 @@ const StoreSettingsView: React.FC = () => {
                   >
                     <i className="fas fa-cloud-upload-alt text-3xl text-gray-300 mb-3"></i>
                     <p className="font-black text-gray-400 text-sm">Click to upload banner</p>
-                    <p className="text-xs text-gray-300 font-medium mt-1">PNG, JPG or GIF (max. 800×400px)</p>
+                    <p className="text-xs text-gray-300 font-medium mt-1">PNG, JPG or GIF (Recommended: 1200×400px for a perfect fit)</p>
                   </div>
                 )}
                 <input
@@ -253,17 +336,28 @@ const StoreSettingsView: React.FC = () => {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-black text-gray-900">Product Categories</h3>
-              <button onClick={() => setCategoryModal(true)} className="text-brand-600 font-black text-xs uppercase hover:underline">Request New Category</button>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">{vendorCategories.length}/{MAX_CATEGORIES}</span>
+                <button onClick={() => setCategoryModal(true)} className="text-brand-600 font-black text-xs uppercase hover:underline">Request New Category</button>
+              </div>
             </div>
             <div className="space-y-2">
               {vendorCategories.length === 0 && <p className="text-gray-400 font-medium text-sm">No categories assigned</p>}
-              {vendorCategories.map((cat: string) => {
+              {vendorCategories.map((cat: string, index: number) => {
+                const isPrimary = index === 0;
                 const removeRequested = requests
-                  .find(r => r.request_type === 'category_remove' && r.current_value === cat && r.status === 'pending');
+                  .find(r => r.request_type === 'category_remove' && (r.current_value || '').toLowerCase() === cat.toLowerCase() && r.status === 'pending');
                 return (
                   <div key={cat} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                    <span className="font-black text-gray-900 text-sm">{cat}</span>
-                    {removeRequested ? (
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-gray-900 text-sm">{cat}</span>
+                      {isPrimary && (
+                        <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full uppercase">Primary</span>
+                      )}
+                    </div>
+                    {isPrimary ? (
+                      <span className="text-[10px] font-black text-gray-400 bg-gray-100 px-2 py-1 rounded-full uppercase">Protected</span>
+                    ) : removeRequested ? (
                       <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-full uppercase">Removal Pending</span>
                     ) : (
                       <button onClick={() => { setRemoveCat(cat); setRemoveReason(''); setRemoveModal(true); }} className="text-xs font-black text-red-400 hover:text-red-600 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 transition-all">
@@ -277,8 +371,9 @@ const StoreSettingsView: React.FC = () => {
           </section>
 
           <div className="pt-6">
-            <button onClick={handleSaveStore} className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-gray-800 transition-all shadow-xl shadow-black/10">
-              Save Changes
+            <button onClick={handleSaveStore} disabled={saving} className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-2 ${saving ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-gray-900 text-white hover:bg-gray-800'}`}>
+              {saving && <i className="fas fa-spinner fa-spin"></i>}
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
 
@@ -315,6 +410,11 @@ const StoreSettingsView: React.FC = () => {
               <button onClick={() => {
                 if (!storeCity.trim()) { setToast('Please enter a city'); return; }
                 if (!cityChangeReason) { setToast('Please select a reason'); return; }
+                if (hasPendingRequest('city_change')) {
+                  setToast('A location change request is already pending. Please wait for admin review.');
+                  setCityModal(false);
+                  return;
+                }
                 submitRequest('city_change', user?.storeCity || '', storeCity, cityChangeReason);
                 setToast('Location change request sent to admin!');
                 setCityModal(false);
@@ -359,7 +459,8 @@ const StoreSettingsView: React.FC = () => {
                     <option value="">Select a category</option>
                     {(() => {
                       const defaultCats = ['Electronics', 'Fashion', 'Home & Living', 'Beauty & Health', 'Sports & Outdoor'];
-                      const allCats = [...defaultCats, ...customCategories.map((c: Category) => c.name)];
+                      const dbCatNames = customCategories.map((c: Category) => c.name);
+                      const allCats = [...new Set([...defaultCats, ...dbCatNames])];
                       const availableCats = allCats.filter(c => !vendorCategories.includes(c));
                       return availableCats.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>

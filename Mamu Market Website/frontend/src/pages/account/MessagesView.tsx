@@ -2,8 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useMessages } from '../../hooks/useSupport';
 import { Conversation } from '../../types';
+import { useApp } from '../../context/AppContext';
+import { compressImageFile, validateFileSize } from '../../utils/fileHelpers';
+import { uploadImage } from '../../utils/imageUpload';
 
 const MessagesView: React.FC = () => {
   const { user } = useAuth();
@@ -14,6 +18,10 @@ const MessagesView: React.FC = () => {
   useEffect(() => {
     // no-op
   }, [user?.id]);
+  const { setToast } = useApp();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [newMessage, setNewMessage] = useState('');
@@ -73,8 +81,29 @@ const MessagesView: React.FC = () => {
   }, [rawMessages, user, isLoading]);
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !activeConv || !user) return;
+    if ((!newMessage.trim() && !attachmentFile) || !activeConv || !user || isUploading) return;
     
+    setIsUploading(true);
+    let attachmentUrl = undefined;
+
+    if (attachmentFile) {
+      const validation = validateFileSize(attachmentFile);
+      if (!validation.valid) {
+        setToast(validation.error || 'File too large');
+        setIsUploading(false);
+        return;
+      }
+
+      try {
+        const compressedBase64 = await compressImageFile(attachmentFile);
+        attachmentUrl = await uploadImage(compressedBase64, 'store-assets', `msg_${Date.now()}_${attachmentFile.name}`);
+      } catch (err) {
+        setToast('Failed to upload attachment');
+        setIsUploading(false);
+        return;
+      }
+    }
+
     const msgData = {
       senderId: user.id,
       senderName: user.name || user.storeName || 'User',
@@ -84,18 +113,24 @@ const MessagesView: React.FC = () => {
       receiverName: activeConv.otherName,
       receiverAvatar: activeConv.otherAvatar || '',
       text: newMessage.trim(),
+      attachment: attachmentUrl
     };
     
     const success = await sendMessage(msgData);
     if (success) {
       setNewMessage('');
+      setAttachmentFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setTimeout(() => {
         if (messagesEndRef.current) {
           const chatArea = messagesEndRef.current.closest('.overflow-y-auto');
           if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
         }
       }, 100);
+    } else {
+      setToast('Failed to send message');
     }
+    setIsUploading(false);
   };
 
   const handleMarkRead = async (conv: any) => {
@@ -117,6 +152,7 @@ const MessagesView: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-12">
+      <PageTitle title="Messages" />
       <div className="max-w-5xl mx-auto">
         <h1 className="text-4xl font-black text-gray-900 tracking-tighter mb-8">Messages</h1>
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden" style={{ height: '70vh' }}>
@@ -220,6 +256,20 @@ const MessagesView: React.FC = () => {
                           <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[70%] px-4 py-3 rounded-2xl text-sm font-medium shadow-sm ${isMine ? 'bg-brand-600 text-white rounded-br-sm' : 'bg-white text-gray-900 rounded-bl-sm border border-gray-100'}`}>
                               <p>{msg.text}</p>
+                              {msg.attachment && (
+                                <div className="mt-2">
+                                  {msg.attachment.match(/\.(jpeg|jpg|gif|png|webp)$/i) || msg.attachment.startsWith('http') ? (
+                                    <a href={msg.attachment} target="_blank" rel="noreferrer">
+                                      <img src={msg.attachment} alt="attachment" className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity" />
+                                    </a>
+                                  ) : (
+                                    <a href={msg.attachment} target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-black/5 p-2 rounded-lg hover:bg-black/10 transition-colors">
+                                      <i className="fas fa-file-download"></i>
+                                      <span className="underline text-xs">Download Attachment</span>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                               <p className={`text-[10px] mt-1 text-right ${isMine ? 'text-brand-200' : 'text-gray-400'}`}>{formatTime(msg.date)}</p>
                             </div>
                           </div>
@@ -230,7 +280,36 @@ const MessagesView: React.FC = () => {
                   </div>
 
                   {/* Input */}
-                  <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+                  {attachmentFile && (
+                    <div className="px-6 pt-4 flex items-center gap-3 bg-white">
+                      <div className="bg-gray-100 px-3 py-2 rounded-xl flex items-center gap-2 text-sm text-gray-700 shadow-sm border border-gray-200">
+                        <i className={attachmentFile.type.startsWith('image/') ? "fas fa-image text-brand-500" : "fas fa-file-alt text-brand-500"}></i>
+                        <span className="truncate max-w-[150px] font-bold">{attachmentFile.name}</span>
+                        <button onClick={() => setAttachmentFile(null)} className="text-red-500 hover:text-red-700 ml-2 transition-colors">
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="px-6 py-4 border-t border-gray-100 flex gap-3 items-center bg-white">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*,.pdf,.doc,.docx"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setAttachmentFile(e.target.files[0]);
+                        }
+                      }} 
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-10 h-10 shrink-0 text-gray-400 hover:text-brand-600 bg-gray-50 hover:bg-brand-50 rounded-2xl flex items-center justify-center transition-all"
+                      title="Attach Image or Document"
+                    >
+                      <i className="fas fa-paperclip text-lg"></i>
+                    </button>
                     <input
                       type="text"
                       value={newMessage}
@@ -239,9 +318,9 @@ const MessagesView: React.FC = () => {
                       placeholder="Type a message..."
                       className="flex-1 bg-gray-50 rounded-2xl px-5 py-3 outline-none font-bold text-sm border-none focus:ring-2 focus:ring-brand-400"
                     />
-                    <button onClick={handleSend} disabled={!newMessage.trim()}
-                      className="w-12 h-12 bg-brand-600 text-white rounded-2xl flex items-center justify-center hover:bg-brand-700 transition-all disabled:opacity-40">
-                      <i className="fas fa-paper-plane text-sm"></i>
+                    <button onClick={handleSend} disabled={(!newMessage.trim() && !attachmentFile) || isUploading}
+                      className="w-12 h-12 shrink-0 bg-brand-600 text-white rounded-2xl flex items-center justify-center hover:bg-brand-700 transition-all disabled:opacity-40 shadow-md">
+                      {isUploading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane text-sm"></i>}
                     </button>
                   </div>
                 </>

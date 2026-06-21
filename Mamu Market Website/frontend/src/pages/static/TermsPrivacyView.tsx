@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import PageTitle from '../../components/PageTitle';
 
 const TERMS_CONTENT = [
   { title: '1. Introduction', body: 'Welcome to Mamu Market. These Terms & Conditions govern your use of our platform and services. By accessing or using Mamu Market, you agree to be bound by these terms. If you do not agree, please refrain from using our platform.' },
@@ -18,7 +19,7 @@ const PRIVACY_CONTENT = [
   { title: '3. Data Security', body: 'We use industry-standard encryption to keep your personal information secure. Our systems are built to protect your data at all times.' },
   { title: '4. Third-Party Sharing', body: 'We do not sell your personal data. We only share necessary information with trusted partners — such as bKash, Nagad, and delivery services — solely to complete your transactions.' },
   { title: '5. Your Rights', body: 'You have the right to access, update, or delete your personal information at any time. Most details can be updated directly from your account\'s Settings page.' },
-  { title: '6. Contact', body: 'If you have any questions about this Privacy Policy, please contact us at support.mamumarket@gmail.com.' },
+  { title: '6. Contact', body: 'If you have any questions about this Privacy Policy, please contact us at admin.mamumarket@gmail.com.' },
 ];
 
 const TermsPrivacyView: React.FC = () => {
@@ -33,6 +34,7 @@ const TermsPrivacyView: React.FC = () => {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="min-h-screen pb-20 bg-[#F5F5F8]">
+      <PageTitle title={title} />
       {/* Hero Header */}
       <div className="bg-gradient-to-br from-brand-700 via-brand-600 to-purple-500 pt-16 pb-20 px-4 relative overflow-hidden">
         <div className="absolute top-[-30%] right-[-10%] w-[350px] h-[350px] rounded-full bg-white/5 blur-[60px]" />
@@ -81,6 +83,25 @@ const TermsPrivacyView: React.FC = () => {
           </div>
 
           <p className="text-xs text-gray-300 font-medium mt-8 text-center">Last updated: March 2026 · Mamu Market, Bangladesh</p>
+          
+          <div className="mt-16 bg-brand-50 rounded-2xl p-6 md:p-8 border border-brand-100 flex flex-col md:flex-row items-center gap-8">
+            <div className="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center shrink-0">
+              <i className="fas fa-life-ring text-white text-2xl"></i>
+            </div>
+            <div className="flex-1 text-center md:text-left">
+              <h3 className="font-black text-gray-900 text-lg mb-2">Still need help?</h3>
+              <p className="text-gray-600 font-medium text-sm leading-relaxed mb-4">
+                If you couldn't find the answer in our documentation, please open a support ticket. Our team is here to help you.
+              </p>
+              <a href="mailto:admin.mamumarket@gmail.com" className="text-brand-600 font-bold text-sm hover:underline">admin.mamumarket@gmail.com</a>
+            </div>
+            <button 
+              onClick={() => window.location.href = '/contact'} 
+              className="shrink-0 px-6 py-3 gradient-primary text-white font-black text-xs uppercase tracking-widest rounded-xl hover:opacity-90 transition-opacity"
+            >
+              Open Support Ticket
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>

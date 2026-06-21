@@ -1,17 +1,27 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useOrders } from '../../hooks/useOrders';
 import { VendorStatus, Order, OrderItem } from '../../types';
 import { supabase } from '../../lib/supabase';
 
 
-// Get vendor status
 const getVendorStatus = (order: Order, vendorId: string): string => {
+  let statusStr = '';
   if (order.vendorStatuses && order.vendorStatuses[vendorId]) {
-    return String(order.vendorStatuses[vendorId]);
+    statusStr = String(order.vendorStatuses[vendorId]);
+  } else {
+    statusStr = order.status || ''; // Fallback
   }
-  return order.status; // Fallback
+  
+  const normalized = statusStr.toLowerCase();
+  if (normalized === 'pending' || normalized === 'processing') return 'Processing';
+  if (normalized === 'shipped') return 'Shipped';
+  if (normalized === 'delivered') return 'Delivered';
+  if (normalized === 'cancelled' || normalized === 'failed') return 'Cancelled';
+  
+  return statusStr ? statusStr.charAt(0).toUpperCase() + statusStr.slice(1) : 'Processing';
 };
 
 // Derive overall status
@@ -37,6 +47,23 @@ const VendorOrdersView: React.FC = () => {
     order.items?.some((item: OrderItem) => item.vendorId === vendorId)
   );
 
+  const restoreVendorInventory = async (order: Order, vId: string) => {
+    if (!order.items) return;
+    const itemsToRestore = (typeof order.items === 'string' ? JSON.parse(order.items) : order.items)
+      .filter((i: any) => i.vendorId === vId);
+    if (itemsToRestore.length === 0) return;
+    try {
+      await supabase.functions.invoke('update-inventory', {
+        body: {
+          action: 'increment',
+          items: itemsToRestore.map((i: any) => ({ product_id: i.id, quantity: i.quantity }))
+        }
+      });
+    } catch (err) {
+      console.error('Failed to restore vendor inventory', err);
+    }
+  };
+
   const handleVendorCancelApprove = async (orderId: string) => {
     const order = allOrders.find((o: Order) => o.id === orderId);
     if (!order || !order.items?.some((item: OrderItem) => item.vendorId === vendorId)) return;
@@ -51,6 +78,7 @@ const VendorOrdersView: React.FC = () => {
       }).eq('id', orderId);
       if (error) throw error;
       refreshOrders();
+      await restoreVendorInventory(order as Order, vendorId as string);
     } catch (err) {
       console.error(err);
     }
@@ -116,14 +144,14 @@ const VendorOrdersView: React.FC = () => {
   };
 
   const totalRevenue = vendorOrders
-    .filter((o: Order) => o.status === 'Delivered')
+    .filter((o: Order) => getVendorStatus(o, vendorId) === 'Delivered')
     .reduce((s: number, order: Order) => {
       const myItems = order.items?.filter((item: OrderItem) => item.vendorId === vendorId) || [];
       return s + myItems.reduce((is: number, i: OrderItem) => is + (i.price || 0) * (i.quantity || 0), 0);
     }, 0);
-
   return (
     <div className="container mx-auto px-4 py-12">
+      <PageTitle title="Store Orders" />
       {/* Header */}
       <div className="flex items-center gap-4 mb-10">
         <button onClick={() => navigate('/dashboard')} className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all">
@@ -204,7 +232,7 @@ const VendorOrdersView: React.FC = () => {
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <p className="font-black text-gray-900">{order.id}</p>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${statusColor[getVendorStatus(order, vendorId)] || 'bg-gray-100 text-gray-500'}`}>
+                        <span className={`inline-flex items-center justify-center h-5 px-2.5 rounded-full text-[9px] font-black uppercase leading-none ${statusColor[getVendorStatus(order, vendorId)] || 'bg-gray-100 text-gray-500'}`}>
                           {getVendorStatus(order, vendorId)}
                         </span>
                       </div>

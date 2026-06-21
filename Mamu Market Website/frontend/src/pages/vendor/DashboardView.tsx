@@ -7,23 +7,17 @@ import 'react-image-crop/dist/ReactCrop.css';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
-import { useVendorProducts, useApprovedProducts } from '../../hooks/useProducts';
+import { useVendorProducts } from '../../hooks/useProducts';
+import { useSharedProducts, useSharedCategories } from '../../context/DataContext';
 import { uploadImage } from '../../utils/imageUpload';
 import { useOrders } from '../../hooks/useOrders';
 import { useReviews } from '../../hooks/useReviews';
 import { usePromoCodes } from '../../hooks/useMarketing';
-import { useCategories } from '../../hooks/useSecondary';
+import PageTitle from '../../components/PageTitle';
+
 import { Product, ProductUpdate, Category, Order, OrderItem, PromoCode } from '../../types';
 import { supabase } from '../../lib/supabase';
-const SUBCATEGORIES: Record<string, string[]> = {
-  'Electronics': ['Mobile', 'Laptop', 'Accessories', 'Audio', 'Camera'],
-  'Fashion': ['Men', 'Women', 'Kids', 'Shoes', 'Accessories'],
-  'Home & Living': ['Furniture', 'Decor', 'Kitchen', 'Bedding'],
-  'Beauty & Health': ['Makeup', 'Skincare', 'Haircare', 'Supplements'],
-  'Sports & Outdoor': ['Fitness', 'Camping', 'Cycling', 'Team Sports'],
-  'Groceries': ['Fresh Produce', 'Snacks', 'Beverages', 'Household'],
-  'Automotive': ['Parts', 'Accessories', 'Tools', 'Car Care']
-};
+
 
 const DashboardView: React.FC = () => {
   const { user } = useAuth();
@@ -31,7 +25,7 @@ const DashboardView: React.FC = () => {
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const { categories: customCategories } = useCategories();
+  const { categories: customCategories } = useSharedCategories();
   const { products: vendorProducts, loading: productsLoading } = useVendorProducts(user?.id);
   const myProducts = vendorProducts.filter((p: Product) => p.status === 'approved');
   const pendingProducts = vendorProducts.filter((p: Product) => p.status === 'pending' || p.status === 'rejected');
@@ -55,27 +49,59 @@ const DashboardView: React.FC = () => {
     fetchUpdates();
   }, [user?.id]);
   const [realOrderCount, setRealOrderCount] = useState(0);
+  const [activeOrderCount, setActiveOrderCount] = useState(0);
+  const [dismissedIds, setDismissedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('dismissedSubmissions') || '[]'); } catch { return []; }
+  });
   const { orders: allOrders } = useOrders(user);
+
+  const normalizeStatus = (status?: string): string => {
+    if (!status) return 'Processing';
+    const n = status.toLowerCase();
+    if (n === 'pending' || n === 'processing') return 'Processing';
+    if (n === 'shipped') return 'Shipped';
+    if (n === 'delivered') return 'Delivered';
+    if (n === 'cancelled' || n === 'failed') return 'Cancelled';
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
 
   useEffect(() => {
     // Filter Vendor Orders
     const vendorOrders = allOrders.filter((order: Order) =>
       order.items?.some((item: OrderItem) => item.vendorId === user?.id)
     );
-    setRealOrderCount(vendorOrders.filter((o: Order) => o.status !== 'Cancelled').length);
+    setRealOrderCount(vendorOrders.length);
+    setActiveOrderCount(vendorOrders.filter((o: Order) => {
+      const st = normalizeStatus(o.status);
+      return st !== 'Cancelled' && st !== 'Delivered';
+    }).length);
   }, [user, allOrders]);
 
   const storeCategory = user?.storeCategory || '';
   const approvedCategoryRequests = requests
     .filter(r => r.request_type === 'category_add' && r.status === 'approved')
     .map(r => r.requested_value);
-  const vendorCategories = storeCategory
+  // Only exclude a category if its most recent approved removal is NEWER than its most recent approved add
+  const isEffectivelyRemoved = (catName) => {
+    const catLower = (catName || '').toLowerCase();
+    const latestRemoval = requests
+      .filter(r => r.request_type === 'category_remove' && r.status === 'approved' && (r.current_value || '').toLowerCase() === catLower)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (!latestRemoval) return false;
+    const latestAdd = requests
+      .filter(r => r.request_type === 'category_add' && r.status === 'approved' && (r.requested_value || '').toLowerCase() === catLower)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (!latestAdd) return true;
+    return new Date(latestRemoval.created_at).getTime() > new Date(latestAdd.created_at).getTime();
+  };
+  const vendorCategories = (storeCategory
     ? [...new Set([...storeCategory.split(',').map((c: string) => c.trim()), ...approvedCategoryRequests])].filter(Boolean)
-    : approvedCategoryRequests.length > 0 ? approvedCategoryRequests : [];
+    : approvedCategoryRequests.length > 0 ? approvedCategoryRequests : []
+  ).filter(cat => !isEffectivelyRemoved(cat));
 
   const [form, setForm] = useState({
     productName: '', category: vendorCategories.length >= 1 ? vendorCategories[0] : '', subCategory: '', price: '', originalPrice: '',
-    units: '', description: '', mainImage: '',
+    units: '', description: '', shortDescription: '', shippingReturnPolicy: '', mainImage: '',
     extraImage1: '', extraImage2: '', extraImage3: '',
     color1name: '', color1image: '', color2name: '', color2image: '',
     color3name: '', color3image: '', color4name: '', color4image: '',
@@ -84,11 +110,13 @@ const DashboardView: React.FC = () => {
     stockStatus: 'in_stock' as 'in_stock' | 'out_of_stock' | 'discontinued',
   });
   const [updateReason, setUpdateReason] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [customDeleteReason, setCustomDeleteReason] = useState('');
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const { products: approvedProducts } = useApprovedProducts();
+  const { products: approvedProducts } = useSharedProducts();
   const { reviews } = useReviews({ vendorId: user?.id });
-  const [deleteReason, setDeleteReason] = useState('');
+
   const { promoCodes } = usePromoCodes(user?.id);
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -143,7 +171,7 @@ const DashboardView: React.FC = () => {
       pixelCropH
     );
 
-    const base64Image = canvas.toDataURL('image/jpeg', 0.95);
+    const base64Image = canvas.toDataURL('image/webp', 0.95);
     setForm(prev => ({ ...prev, [currentImageField]: base64Image }));
     setCropModalOpen(false);
     setUpImg(null);
@@ -185,10 +213,12 @@ const DashboardView: React.FC = () => {
           'originalPrice': 'original_price',
           'units': 'units',
           'description': 'description',
+          'shortDescription': 'short_description',
+          'shippingReturnPolicy': 'shipping_return_policy',
           'mainImage': 'main_image'
         };
 
-        ['productName', 'price', 'originalPrice', 'units', 'description', 'mainImage'].forEach(field => {
+        ['productName', 'price', 'originalPrice', 'units', 'description', 'shortDescription', 'shippingReturnPolicy', 'mainImage'].forEach(field => {
           const oldVal = String(editingProduct[field] ?? '');
           const newVal = String((form as any)[field] ?? '');
           if (oldVal !== newVal) {
@@ -215,9 +245,11 @@ const DashboardView: React.FC = () => {
           'originalPrice': 'original_price',
           'units': 'units',
           'description': 'description',
+          'shortDescription': 'short_description',
+          'shippingReturnPolicy': 'shipping_return_policy',
           'mainImage': 'main_image'
         };
-        ['productName', 'price', 'originalPrice', 'units', 'description', 'mainImage'].forEach(field => {
+        ['productName', 'price', 'originalPrice', 'units', 'description', 'shortDescription', 'shippingReturnPolicy', 'mainImage'].forEach(field => {
           if ((form as any)[field] !== editingProduct[field]) {
             changes[fieldMapping[field]] = (form as any)[field];
           }
@@ -247,7 +279,7 @@ const DashboardView: React.FC = () => {
       }
     }
     setShowModal(false);
-    setForm({ productName: '', category: vendorCategories.length >= 1 ? vendorCategories[0] : '', subCategory: '', price: '', originalPrice: '', units: '', description: '', mainImage: '', extraImage1: '', extraImage2: '', extraImage3: '', color1name: '', color1image: '', color2name: '', color2image: '', color3name: '', color3image: '', color4name: '', color4image: '', isSale: false, dealType: 'none', stockStatus: 'in_stock' });
+    setForm({ productName: '', category: vendorCategories.length >= 1 ? vendorCategories[0] : '', subCategory: '', price: '', originalPrice: '', units: '', description: '', shortDescription: '', shippingReturnPolicy: '', mainImage: '', extraImage1: '', extraImage2: '', extraImage3: '', color1name: '', color1image: '', color2name: '', color2image: '', color3name: '', color3image: '', color4name: '', color4image: '', isSale: false, dealType: 'none', stockStatus: 'in_stock' });
     refreshData();
   };
 
@@ -258,21 +290,24 @@ const DashboardView: React.FC = () => {
   };
 
   const confirmDelete = async () => {
-    if (!deleteReason.trim()) { setToast('Please provide a reason'); return; }
+    const finalReason = deleteReason === 'Other' ? customDeleteReason.trim() : deleteReason.trim();
+    if (!finalReason) { setToast('Please provide a reason'); return; }
     // Submit Deletion Request
     // Check if already requested
     const alreadyRequested = requests.some(r => r.request_type === 'product_remove' && r.current_value === deleteTarget.id && r.status !== 'rejected');
     if (alreadyRequested) { setToast('Removal request already submitted!'); setDeleteModal(false); return; }
 
-    await submitRequest('product_remove', deleteTarget.id, undefined, deleteReason);
+    await submitRequest('product_remove', deleteTarget.id, deleteTarget.productName || deleteTarget.name, finalReason);
     setDeleteModal(false);
     setDeleteTarget(null);
     setDeleteReason('');
+    setCustomDeleteReason('');
     setToast('Removal request sent to admin for approval!');
   };
 
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Merchant Dashboard" />
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-16">
           <div>
@@ -291,16 +326,22 @@ const DashboardView: React.FC = () => {
             const allPendingProds = pendingProducts;
             const rejectedProds = allPendingProds.filter((p: Product) => p.status === 'rejected');
             const activePendingProds = allPendingProds.filter((p: Product) => p.status === 'pending');
-            const pendingUpdates: any[] = [];
-            const pendingStoreReqs = requests.filter(p => p.request_type === 'store_name' && p.status === 'pending');
-            const pendingCatReqs = requests.filter(p => p.request_type === 'category_add' && p.status === 'pending');
-            const totalPending = activePendingProds.length + pendingUpdates.length + pendingStoreReqs.length + pendingCatReqs.length;
+            
+            const activePendingUpdates = pendingUpdates.filter(u => u.status === 'pending');
+            const activePendingReqs = requests.filter(r => r.status === 'pending');
+            const activePendingPromos = promoCodes.filter((c: PromoCode) => c.status === 'pending');
+            const totalPending = activePendingProds.length + activePendingUpdates.length + activePendingReqs.length + activePendingPromos.length;
+
+            const rejectedUpdates = pendingUpdates.filter(u => u.status === 'rejected');
+            const rejectedReqs = requests.filter(r => r.status === 'rejected');
+            const rejectedPromos = promoCodes.filter((c: PromoCode) => c.status === 'rejected');
+            const totalRejected = rejectedProds.length + rejectedUpdates.length + rejectedReqs.length + rejectedPromos.length;
 
             return [
               { label: 'Active Products', value: approvedProds.length, icon: 'fa-box', color: 'text-emerald-500', bg: 'bg-emerald-50' },
               { label: 'Pending Approval', value: totalPending, icon: 'fa-clock', color: 'text-amber-500', bg: 'bg-amber-50' },
               { label: 'Total Orders', value: realOrderCount, icon: 'fa-shopping-cart', color: 'text-brand-600', bg: 'bg-grad-soft', link: '/dashboard/orders' },
-              { label: 'Rejected', value: rejectedProds.length, icon: 'fa-times-circle', color: 'text-red-500', bg: 'bg-red-50' }
+              { label: 'Total Reviews', value: reviews.length, icon: 'fa-star', color: 'text-purple-600', bg: 'bg-purple-50', link: '/dashboard/reviews' }
             ].map((stat, i) => (
               <motion.div
                 key={i}
@@ -363,13 +404,15 @@ const DashboardView: React.FC = () => {
             <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-10">Quick Actions</h3>
             <div className="space-y-4">
               {(() => {
-                // Review Count
-                const reviewCount = reviews.length;
+                // Unreplied Review Count
+                const unrepliedReviewCount = reviews.filter(r => !r.vendorReply).length;
+                const activePromoCount = promoCodes.filter((c: PromoCode) => (c.vendor_id === user?.id || c.assigned_vendor_id === user?.id) && c.is_active !== false && c.status !== 'pending').length;
 
                 return [
-                  { label: 'My Orders', icon: 'fa-shopping-bag', action: () => navigate('/dashboard/orders'), count: realOrderCount },
+                  { label: 'My Orders', icon: 'fa-shopping-bag', action: () => navigate('/dashboard/orders'), count: activeOrderCount },
                   { label: 'Update Inventory', icon: 'fa-boxes', action: () => navigate('/dashboard/inventory') },
-                  { label: 'Customer Reviews', icon: 'fa-star', action: () => navigate('/dashboard/reviews'), count: reviewCount },
+                  { label: 'Promo Codes', icon: 'fa-ticket-alt', action: () => navigate('/dashboard/promo'), count: activePromoCount },
+                  { label: 'Customer Reviews', icon: 'fa-star', action: () => navigate('/dashboard/reviews'), count: unrepliedReviewCount },
                   { label: 'Store Analytics', icon: 'fa-chart-pie', action: () => navigate('/dashboard/analytics') },
                   { label: 'Store Settings', icon: 'fa-cog', action: () => navigate('/settings/store') }
                 ].map((action, i) => (
@@ -431,7 +474,6 @@ const DashboardView: React.FC = () => {
 
 
         <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm p-10 mt-8">
-          <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-8">Submission Status</h3>
           {(() => {
             const newProducts = pendingProducts;
             const activeUpdates = pendingUpdates.filter((u: ProductUpdate) => u.status === 'pending');
@@ -439,8 +481,9 @@ const DashboardView: React.FC = () => {
             const storeRequests = requests.filter(r => r.request_type === 'store_name');
             const categoryRequests = requests.filter(r => r.request_type === 'category_add');
 
-            const allItems = [
+            const rawItems = [
               ...newProducts.map((p: Product) => ({
+                uid: `prod-${p.id}`,
                 id: p.id, title: p.productName || p.name, subtitle: `৳${p.price} • ${p.units || p.stock || 0} units`,
                 type: 'New Product', image: p.mainImage,
                 status: p.status === 'rejected' ? 'REJECTED' : p.status === 'approved' ? 'APPROVED' : 'PENDING',
@@ -448,11 +491,13 @@ const DashboardView: React.FC = () => {
                 reason: p.status, date: p.status
               })),
               ...activeUpdates.map((u: ProductUpdate) => ({
+                uid: `upd-${u.id}`,
                 id: u.id, title: myProducts.find(p => p.id === u.productId)?.name || 'Unknown Product', subtitle: `Changes requested`,
                 type: 'Product Update', image: null,
                 status: 'PENDING', color: 'blue', reason: null, date: u.date
               })),
               ...removeRequests.map(r => ({
+                uid: `rem-${r.id}`,
                 id: r.id, title: myProducts.find(p => p.id === r.current_value)?.name || r.current_value || 'Product', subtitle: `Reason: ${r.reason || 'Not specified'}`,
                 type: 'Product Removal', image: null,
                 status: r.status === 'approved' ? 'APPROVED' : r.status === 'rejected' ? 'REJECTED' : 'PENDING',
@@ -460,6 +505,7 @@ const DashboardView: React.FC = () => {
                 reason: r.reason, date: r.created_at
               })),
               ...storeRequests.map(r => ({
+                uid: `store-${r.id}`,
                 id: r.id, title: r.requested_value || 'Store Name Change', subtitle: 'Store name change request',
                 type: 'Store Name', image: null,
                 status: r.status === 'approved' ? 'APPROVED' : r.status === 'rejected' ? 'REJECTED' : 'PENDING',
@@ -467,6 +513,7 @@ const DashboardView: React.FC = () => {
                 reason: r.reason, date: r.created_at
               })),
               ...categoryRequests.map(r => ({
+                uid: `cat-${r.id}`,
                 id: r.id, title: r.requested_value || 'Category Request', subtitle: `Reason: ${r.reason || 'Not specified'}`,
                 type: 'New Category', image: null,
                 status: r.status === 'approved' ? 'APPROVED' : r.status === 'rejected' ? 'REJECTED' : 'PENDING',
@@ -474,6 +521,17 @@ const DashboardView: React.FC = () => {
                 reason: r.reason, date: r.created_at
               })),
             ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+            const allItems = rawItems.filter(item => item.status === 'PENDING' || !dismissedIds.includes(item.uid));
+            const hasDismissable = allItems.some(i => i.status !== 'PENDING');
+
+            const handleMarkAsRead = () => {
+              const idsToDismiss = allItems.filter(i => i.status !== 'PENDING').map(i => i.uid);
+              if (idsToDismiss.length === 0) return;
+              const updated = [...new Set([...dismissedIds, ...idsToDismiss])];
+              setDismissedIds(updated);
+              localStorage.setItem('dismissedSubmissions', JSON.stringify(updated));
+            };
 
             const colorMap: any = {
               red: 'bg-red-100 text-red-700',
@@ -492,11 +550,25 @@ const DashboardView: React.FC = () => {
               'Category': 'text-indigo-600',
             };
 
-            if (allItems.length === 0) return <p className="text-gray-400 font-bold text-center py-10">No submissions yet</p>;
-
             return (
-              <div className="space-y-3">
-                {allItems.map((item: Record<string, any>, i: number) => (
+              <>
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-2xl font-black text-gray-900 tracking-tight">Submission Status</h3>
+                  {hasDismissable && (
+                    <button
+                      onClick={handleMarkAsRead}
+                      className="px-4 py-2 rounded-full bg-gray-100 text-gray-600 font-bold text-xs hover:bg-gray-200 transition-colors"
+                    >
+                      <i className="fas fa-check-double mr-1.5"></i> Mark resolved as read
+                    </button>
+                  )}
+                </div>
+
+                {allItems.length === 0 ? (
+                  <p className="text-gray-400 font-bold text-center py-10">No submissions yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {allItems.map((item: Record<string, any>, i: number) => (
                   <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                     {item.image && <img src={item.image} referrerPolicy="no-referrer" className="w-12 h-12 rounded-xl object-cover shrink-0" alt={item.title} />}
                     {!item.image && (
@@ -515,64 +587,13 @@ const DashboardView: React.FC = () => {
                     </span>
                   </div>
                 ))}
-              </div>
+                  </div>
+                )}
+              </>
             );
           })()}
         </div>
       </div>
-
-      {/* My Promo Codes Widget */}
-      {(() => {
-        const myCodes = promoCodes.filter((c: PromoCode) =>
-          c.vendor_id === user?.id || c.assigned_vendor_id === user?.id
-        );
-        if (myCodes.length === 0) return null;
-        return (
-          <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm p-10 mt-8">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-black text-gray-900 tracking-tight">My Promo Codes</h3>
-              <button
-                onClick={() => navigate('/dashboard/marketing')}
-                className="text-xs font-black text-brand-600 uppercase tracking-widest hover:underline"
-              >
-                Manage →
-              </button>
-            </div>
-            <div className="space-y-3">
-              {myCodes.slice(0, 5).map((c: PromoCode, i: number) => {
-                const isActive = c.active !== false && (!c.expiresAt || new Date(c.expiresAt) > new Date());
-                const isAdminCreated = !c.vendorId || c.type === 'admin';
-                return (
-                  <div key={i} className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
-                      <i className="fas fa-tag text-purple-600 text-sm"></i>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-black text-gray-900 text-sm font-mono">{c.code}</p>
-                        {isAdminCreated && (
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">By Admin</span>
-                        )}
-                      </div>
-                      <p className="text-gray-400 text-xs font-medium">
-                        {c.discountType === '%' ? `${c.discount}% off` : `৳${c.discount} off`}
-                        {c.minOrder ? ` · Min ৳${c.minOrder}` : ''}
-                        {c.maxUses ? ` · ${c.usedCount || 0}/${c.maxUses} used` : ''}
-                      </p>
-                    </div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shrink-0 ${isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                );
-              })}
-              {myCodes.length > 5 && (
-                <p className="text-center text-gray-400 text-xs font-bold py-2">+{myCodes.length - 5} more — <button onClick={() => navigate('/dashboard/marketing')} className="text-brand-600 hover:underline">View all</button></p>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
@@ -602,10 +623,11 @@ const DashboardView: React.FC = () => {
                   <select value={form.subCategory} onChange={e => setForm({ ...form, subCategory: e.target.value })} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none" disabled={!form.category}>
                     <option value="">Select Sub-category</option>
                     {form.category && (() => {
-                      const hardcoded = SUBCATEGORIES[form.category] || [];
+
                       const customMatch = customCategories.find((c: Category) => c.name.toLowerCase() === form.category.toLowerCase());
                       const customSubs = (customMatch?.subcategories || []).map((s: { name: string }) => s.name);
-                      const allSubs = [...new Set([...hardcoded, ...customSubs])];
+                      const allSubs = [...new Set([...customSubs])];
+                      if (allSubs.length === 0) allSubs.push('General');
                       return allSubs.map(sc => <option key={sc} value={sc}>{sc}</option>);
                     })()}
                   </select>
@@ -637,8 +659,16 @@ const DashboardView: React.FC = () => {
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Description</label>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Short Description</label>
+                <textarea value={form.shortDescription} onChange={e => setForm({ ...form, shortDescription: e.target.value })} rows={2} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none resize-none" placeholder="Brief summary for product card" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Detailed Description</label>
                 <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none resize-none" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Shipping & Return Policy</label>
+                <textarea value={form.shippingReturnPolicy} onChange={e => setForm({ ...form, shippingReturnPolicy: e.target.value })} rows={2} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none resize-none" placeholder="e.g. Standard shipping takes 3-5 days" />
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">Main Image</label>
@@ -798,7 +828,7 @@ const DashboardView: React.FC = () => {
                 <option value="Other">Other</option>
               </select>
               {deleteReason === 'Other' && (
-                <textarea value={deleteReason === 'Other' ? '' : deleteReason} onChange={e => setDeleteReason(e.target.value)} placeholder="Describe your reason..." rows={2} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none resize-none" />
+                <textarea value={customDeleteReason} onChange={e => setCustomDeleteReason(e.target.value)} placeholder="Describe your reason..." rows={2} className="w-full bg-gray-50 rounded-2xl px-6 py-4 outline-none font-bold border-none resize-none" />
               )}
             </div>
             <div className="flex gap-3">

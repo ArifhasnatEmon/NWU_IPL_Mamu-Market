@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '../../hooks/useOrders';
+import PageTitle from '../../components/PageTitle';
+import { useCart } from '../../context/CartContext';
 import { Order } from '../../types';
 
 const CheckoutSuccessView: React.FC = () => {
@@ -9,8 +11,12 @@ const CheckoutSuccessView: React.FC = () => {
   const location = useLocation();
   const [orderData, setOrderData] = useState<Order | null>(null);
   const { orders } = useOrders();
+  const { clearCart } = useCart();
 
   useEffect(() => {
+    // Clear cart upon reaching success page
+    clearCart();
+
     // Use navigation state
     if (location.state?.orderData) {
       setOrderData(location.state.orderData);
@@ -20,7 +26,8 @@ const CheckoutSuccessView: React.FC = () => {
   }, [location.state, orders]);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="min-h-screen pt-32 pb-20 px-4 bg-[#F5F5F8] flex items-center justify-center">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="min-h-[70vh] py-16 px-4 bg-[#F5F5F8] flex items-center justify-center">
+      <PageTitle title="Order Confirmed" />
       <div className="max-w-md w-full bg-white rounded-[2rem] p-10 text-center shadow-[0_8px_32px_rgba(0,0,0,0.08)]">
         <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-8 relative">
           <motion.div

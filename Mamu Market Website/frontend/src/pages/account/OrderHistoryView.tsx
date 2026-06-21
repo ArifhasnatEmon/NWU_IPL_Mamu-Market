@@ -1,15 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { User, CartItem, Order, Notification } from '../../types';
+import { User, CartItem, Order } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useOrders } from '../../hooks/useOrders';
-import { useVendors } from '../../hooks/useVendors';
-import { useNotifications } from '../../hooks/useNotifications';
+import { useSharedVendors } from '../../context/DataContext';
+
 import { supabase } from '../../lib/supabase';
 
 
 const STATUS_STEPS = ['Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
+
+const normalizeStatus = (status?: string): string => {
+  if (!status) return 'Processing';
+  const n = status.toLowerCase();
+  if (n === 'pending' || n === 'processing') return 'Processing';
+  if (n === 'shipped') return 'Shipped';
+  if (n === 'delivered') return 'Delivered';
+  if (n === 'cancelled' || n === 'failed') return 'Cancelled';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
 
 
 
@@ -25,10 +36,16 @@ const OrderHistoryView: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { orders, refreshOrders } = useOrders(user);
-  const { vendors } = useVendors();
-  const { notifications, markRead: markNotifRead, markAllRead } = useNotifications(user?.id);
+  const { vendors } = useSharedVendors();
+
   const [cancelModalOrderId, setCancelModalOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 5;
+
+  const totalPages = Math.ceil(orders.length / ordersPerPage);
+  const displayedOrders = orders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
 
   // Cancel request
   const handleSendCancelRequest = async (orderId: string) => {
@@ -52,11 +69,11 @@ const OrderHistoryView: React.FC = () => {
 
   // Analytics
   const totalOrders = orders.length;
-  const totalSpent = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalSpent = orders.filter(o => o.status !== 'Cancelled').reduce((sum, o) => sum + o.total, 0);
   const lastOrderDate = orders.length > 0
     ? new Date(orders[0].createdAt || orders[0].date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : '—';
-  const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
+  const deliveredCount = orders.filter(o => normalizeStatus(o.status) === 'Delivered').length;
 
   return (
     <motion.div
@@ -64,6 +81,7 @@ const OrderHistoryView: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="container mx-auto px-4 py-12"
     >
+      <PageTitle title="My Orders" />
       <div className="max-w-4xl mx-auto">
         {/* Header + Stats */}
         <div className="mb-10">
@@ -96,49 +114,11 @@ const OrderHistoryView: React.FC = () => {
           </div>
         )}
 
-        {/* In-app Notifications */}
-        {notifications.length > 0 && (
-          <div className="mb-10 bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 bg-gray-50">
-              <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
-                <i className="fas fa-bell text-brand-500"></i>
-                Notifications
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="w-5 h-5 bg-brand-600 text-white rounded-full text-[9px] font-black flex items-center justify-center">
-                    {notifications.filter(n => !n.read).length}
-                  </span>
-                )}
-              </p>
-              {notifications.some(n => !n.read) && (
-                <button onClick={markAllRead} className="text-[10px] font-black text-gray-400 hover:text-brand-600 uppercase tracking-widest transition-colors">
-                  Mark all read
-                </button>
-              )}
-            </div>
-            <div className="divide-y divide-gray-50">
-              {notifications.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => markNotifRead(n.id)}
-                  className={`flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-gray-50 transition-all ${!n.read ? 'bg-brand-50' : ''}`}
-                >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${n.type === 'cancel_approved' ? 'bg-emerald-100' : 'bg-orange-100'}`}>
-                    <i className={`fas ${n.type === 'cancel_approved' ? 'fa-check text-emerald-500' : 'fa-times text-orange-400'} text-xs`}></i>
-                  </div>
-                  <div className="flex-1">
-                    <p className={`text-sm font-bold leading-relaxed ${!n.read ? 'text-gray-900' : 'text-gray-500'}`}>{n.message}</p>
-                    <p className="text-[10px] font-medium text-gray-400 mt-1">{n.date} · Order: {n.orderId}</p>
-                  </div>
-                  {!n.read && <div className="w-2 h-2 bg-brand-600 rounded-full mt-2 shrink-0"></div>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
         
         {orders.length > 0 ? (
           <div className="space-y-8">
-            {orders.map((order) => (
+            {displayedOrders.map((order) => (
               <div key={order.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-8 hover:shadow-md transition-shadow">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-6 border-b border-gray-50 gap-4">
                   <div>
@@ -159,14 +139,14 @@ const OrderHistoryView: React.FC = () => {
                   </div>
                   <div className="flex flex-col items-end gap-3">
                     {/* Cancelled or in-progress tracker */}
-                    {order.status === 'Cancelled' ? (
+                    {normalizeStatus(order.status) === 'Cancelled' ? (
                       <span className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-red-100 text-red-500">
                         Cancelled
                       </span>
                     ) : (
-                      <div className="flex items-center justify-between w-full mt-1">
+                      <div className="flex items-start justify-between w-full mt-1">
                         {STATUS_STEPS.map((step, i) => {
-                          const activeIdx = STATUS_STEPS.indexOf(order.status);
+                          const activeIdx = STATUS_STEPS.indexOf(normalizeStatus(order.status));
                           const done = i <= activeIdx;
                           const isCurrent = i === activeIdx;
                           return (
@@ -175,12 +155,12 @@ const OrderHistoryView: React.FC = () => {
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-all border-2 ${
                                   done ? 'bg-brand-600 border-brand-600 text-white shadow-md shadow-brand-200' : 'bg-white border-gray-200 text-gray-300'
                                 } ${isCurrent ? 'ring-4 ring-brand-100 scale-110' : ''}`}>
-                                  {done && !isCurrent ? <i className="fas fa-check text-[10px]"></i> : i + 1}
+                                  {done && (!isCurrent || i === STATUS_STEPS.length - 1) ? <i className="fas fa-check text-[10px]"></i> : i + 1}
                                 </div>
                                 <p className={`text-[8px] font-black uppercase tracking-wide text-center leading-tight max-w-[56px] ${done ? 'text-brand-600' : 'text-gray-300'}`}>{step}</p>
                               </div>
                               {i < STATUS_STEPS.length - 1 && (
-                                <div className={`flex-1 h-0.5 mb-5 mx-1 rounded-full ${i < activeIdx ? 'bg-brand-600' : 'bg-gray-100'}`} />
+                                <div className={`flex-1 h-0.5 mt-[15px] mx-1 rounded-full ${i < activeIdx ? 'bg-brand-600' : 'bg-gray-100'}`} />
                               )}
                             </React.Fragment>
                           );
@@ -189,7 +169,7 @@ const OrderHistoryView: React.FC = () => {
                     )}
 
                     {/* Cancel request states — only relevant during Processing */}
-                    {order.status === 'Processing' && (
+                    {normalizeStatus(order.status) === 'Processing' && (
                       <div className="text-right">
                         {!order.cancelRequest && (
                           <button
@@ -277,8 +257,8 @@ const OrderHistoryView: React.FC = () => {
                               <i className="fas fa-store text-gray-400 text-xs"></i>
                               <span className="text-xs font-black text-gray-700">{vendorName}</span>
                             </div>
-                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${statusColor[vendorStatus as string] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
-                              {vendorStatus as string}
+                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${statusColor[normalizeStatus(vendorStatus as string)] || 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                              {normalizeStatus(vendorStatus as string)}
                             </span>
                           </div>
                           {/* Items from this vendor */}
@@ -289,7 +269,7 @@ const OrderHistoryView: React.FC = () => {
                                 <div className="flex-1">
                                   <h4 className="font-bold text-gray-900 text-sm">{item.name}</h4>
                                   <p className="text-xs text-gray-500 font-medium">Qty: {item.quantity} × ৳{item.price.toLocaleString()}</p>
-                                  {vendorStatus === 'Delivered' && (
+                                  {normalizeStatus(vendorStatus as string) === 'Delivered' && (
                                     <button
                                       onClick={() => navigate(`/products/${item.id}`)}
                                       className="text-[10px] font-black uppercase tracking-widest text-brand-600 hover:text-brand-700 transition-colors mt-1"
@@ -309,6 +289,40 @@ const OrderHistoryView: React.FC = () => {
                 </div>
               </div>
             ))}
+            
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-12 mb-8">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-gray-100 text-gray-500 hover:text-brand-600 hover:border-brand-200 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalPages }).map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(idx + 1)}
+                      className={`w-10 h-10 rounded-xl font-black text-xs transition-all ${
+                        currentPage === idx + 1 
+                          ? 'bg-brand-600 text-white shadow-md shadow-brand-200' 
+                          : 'bg-white text-gray-500 border border-gray-100 hover:border-brand-200 hover:text-brand-600'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-gray-100 text-gray-500 hover:text-brand-600 hover:border-brand-200 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <motion.div

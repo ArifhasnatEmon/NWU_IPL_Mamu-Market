@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { Vendor, Product } from '../../types';
 import Pagination from '../../components/ui/Pagination';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
-import { useVendors } from '../../hooks/useVendors';
+import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
+import { useSharedProducts, useSharedVendors } from '../../context/DataContext';
 
 const VendorsView: React.FC = () => {
   const { navigateToVendor } = useApp();
@@ -13,7 +14,7 @@ const VendorsView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState<'default' | 'rating' | 'products'>('default');
-  const { products: dynamicProducts } = useApprovedProducts();
+  const { products: dynamicProducts } = useSharedProducts();
   const [allVendors, setAllVendors] = useState<Vendor[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [catOpen, setCatOpen] = useState(false);
@@ -23,16 +24,23 @@ const VendorsView: React.FC = () => {
   const sortRef = useRef<HTMLDivElement>(null);
   const itemsPerPage = 6;
 
-  const { vendors: fetchedVendors } = useVendors();
+  const { vendors: fetchedVendors } = useSharedVendors();
 
   useEffect(() => {
     // Only use dynamic vendors from database
     const localVendors = fetchedVendors
       .map((u: Vendor) => {
-        const dynamicCount = dynamicProducts.filter((p: Product) => p.vendorId === u.id).length;
+        const vendorProducts = dynamicProducts.filter((p: Product) => p.vendorId === u.id);
+        const dynamicCount = vendorProducts.length;
+        // Compute vendor rating from their products' ratings
+        const ratedProducts = vendorProducts.filter(p => p.rating > 0);
+        const vendorRating = ratedProducts.length > 0
+          ? Math.round((ratedProducts.reduce((sum, p) => sum + p.rating, 0) / ratedProducts.length) * 10) / 10
+          : 0;
         return {
           ...u,
           productsCount: dynamicCount,
+          rating: vendorRating,
           isNew: true,
         } as Vendor;
       });
@@ -88,6 +96,7 @@ const VendorsView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTitle title="All Stores" />
       {/* Hero */}
       <div className="bg-white border-b border-gray-100 pt-20 pb-12">
         <div className="container mx-auto px-4 text-center max-w-3xl">

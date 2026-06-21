@@ -56,7 +56,7 @@ export const STATIC_CONTENT = {
           <div class="grid grid-cols-1 md:grid-cols-1 gap-6 mt-6 max-w-sm">
             <div class="p-6 bg-gray-50 rounded-2xl flex items-start gap-4">
               <div class="w-10 h-10 bg-brand-100 text-brand-600 rounded-xl flex items-center justify-center shrink-0"><i class="fas fa-envelope"></i></div>
-              <div><p class="font-black text-gray-900 text-sm mb-1">Email</p><p class="text-sm text-gray-500">support.mamumarket@gmail.com</p></div>
+              <div><p class="font-black text-gray-900 text-sm mb-1">Email</p><p class="text-sm text-gray-500">admin.mamumarket@gmail.com</p></div>
             </div>
           </div>
         </section>
@@ -141,7 +141,7 @@ export const STATIC_CONTENT = {
           <h3 class="font-bold text-gray-900 mt-6">Can I cancel an order?</h3>
           <p>You can cancel an order while it is still in "Processing" status. Go to <strong>My Orders</strong> and select the order to cancel.</p>
           <h3 class="font-bold text-gray-900 mt-6">I received the wrong product. What should I do?</h3>
-          <p>Contact us within 48 hours at support.mamumarket@gmail.com with a photo of the product. We will resolve it promptly.</p>
+          <p>Contact us within 48 hours at admin.mamumarket@gmail.com with a photo of the product. We will resolve it promptly.</p>
         </div>
 
         <div class="bg-brand-50 border border-brand-100 rounded-2xl p-8 mt-8 flex items-start gap-6">
@@ -149,7 +149,7 @@ export const STATIC_CONTENT = {
           <div>
             <h3 class="font-black text-gray-900 mb-1">Still need help?</h3>
             <p class="text-sm text-gray-600 font-medium mb-3">Our support team is available every day from 9 AM to 10 PM.</p>
-            <p class="text-sm font-black text-brand-600">support.mamumarket@gmail.com</p>
+            <p class="text-sm font-black text-brand-600">admin.mamumarket@gmail.com</p>
           </div>
         </div>
       </div>
@@ -216,7 +216,7 @@ export const STATIC_CONTENT = {
         </section>
         <section>
           <h2 class="text-gradient">6. Contact</h2>
-          <p>If you have any questions about this Privacy Policy, please contact us at support.mamumarket@gmail.com.</p>
+          <p>If you have any questions about this Privacy Policy, please contact us at admin.mamumarket@gmail.com.</p>
         </section>
       </div>
     `
@@ -243,7 +243,7 @@ export const STATIC_CONTENT = {
         </section>
         <section>
           <h2 class="text-gradient">5. How to Start a Return</h2>
-          <p>Email support.mamumarket@gmail.com with your order number and photos of the item. We will guide you through the next steps and arrange pickup or drop-off if approved.</p>
+          <p>Email admin.mamumarket@gmail.com with your order number and photos of the item. We will guide you through the next steps and arrange pickup or drop-off if approved.</p>
         </section>
       </div>
     `
@@ -279,7 +279,7 @@ export const STATIC_CONTENT = {
         <section class="bg-brand-50 border border-brand-100 rounded-2xl p-8">
           <h3 class="font-black text-gray-900 mb-2">Interested in becoming a vendor?</h3>
           <p class="text-sm text-gray-600 mb-3">Join thousands of sellers already growing their business on Mamu Market.</p>
-          <p class="font-black text-brand-600">vendor.mamumarket@gmail.com</p>
+          <p class="font-black text-brand-600">admin.mamumarket@gmail.com</p>
         </section>
       </div>
     `

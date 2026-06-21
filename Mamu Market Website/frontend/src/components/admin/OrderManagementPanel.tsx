@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { pushNotif } from '../../utils/notifications';
+
 import { useOrders } from '../../hooks/useOrders';
 import { Order, OrderItem } from '../../types';
 import { supabase } from '../../lib/supabase';
@@ -15,11 +15,24 @@ const deriveOverallStatus = (vendorStatuses: Record<string, string>): string => 
   return 'Processing';
 };
 
+const normalizeStatus = (status?: string): string => {
+  if (!status) return 'Processing';
+  const n = status.toLowerCase();
+  if (n === 'pending' || n === 'processing') return 'Processing';
+  if (n === 'shipped') return 'Shipped';
+  if (n === 'delivered') return 'Delivered';
+  if (n === 'cancelled' || n === 'failed') return 'Cancelled';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
 const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ setToast }) => {
   const { user } = useAuth();
   const [orderSearch, setOrderSearch] = useState('');
   const [orderFilter, setOrderFilter] = useState('All');
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 10;
   
   const { orders: allOrders, refreshOrders } = useOrders(user);
 
@@ -36,6 +49,21 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
     }
   };
 
+  const restoreInventory = async (order: Order) => {
+    if (!order.items) return;
+    const itemsToRestore = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+    try {
+      await supabase.functions.invoke('update-inventory', {
+        body: {
+          action: 'increment',
+          items: itemsToRestore.map((i: any) => ({ product_id: i.id, quantity: i.quantity }))
+        }
+      });
+    } catch (err) {
+      console.error('Failed to restore inventory', err);
+    }
+  };
+
   // Approve cancel
   const handleAdminApprove = async (orderId: string) => {
     const order = allOrders.find((o: Order) => o.id === orderId);
@@ -49,9 +77,8 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
       if (error) throw error;
 
       refreshOrders();
-      if (order?.userId) {
-        pushNotif(order.userId, 'Order Cancelled', `Your cancellation request for order ${orderId} has been approved. Your order has been cancelled.`);
-      }
+      await restoreInventory(order as Order);
+
       setToast(`Order ${orderId} cancelled. Customer notified`);
     } catch (e) {
       console.error(e);
@@ -70,9 +97,7 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
       if (error) throw error;
       
       refreshOrders();
-      if (order?.userId) {
-        pushNotif(order.userId, 'Cancel Request Rejected', `Your cancellation request for order ${orderId} cannot be processed at this point. Your order remains active.`);
-      }
+
       setToast(`Cancel request rejected for ${orderId}. Customer notified`);
     } catch (e) {
       console.error(e);
@@ -93,9 +118,8 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
         if (error) throw error;
 
         refreshOrders();
-        if (order?.userId) {
-          pushNotif(order.userId, 'Order Cancelled', `Your cancellation request for order ${orderId} has been approved by the vendor. Your order has been cancelled.`);
-        }
+        await restoreInventory(order as Order);
+
         setToast(`Order ${orderId} cancelled. Customer notified`);
       } else {
         const { error } = await supabase.from('orders').update({
@@ -104,9 +128,7 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
         if (error) throw error;
 
         refreshOrders();
-        if (order?.userId) {
-          pushNotif(order.userId, 'Cancel Request Rejected', `Your cancellation request for order ${orderId} has been reviewed. Unfortunately, the vendor cannot cancel this order at this stage.`);
-        }
+
         setToast(`Cancel rejected for ${orderId}. Customer notified`);
       }
     } catch (e) {
@@ -132,17 +154,29 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
       if (error) throw error;
       
       refreshOrders();
-      if (order?.userId) {
-        if (newStatus === 'Shipped') {
-          pushNotif(order.userId, 'Order Shipped', `Your order ${orderId} has been shipped and is on its way!`);
-        } else if (newStatus === 'Delivered') {
-          pushNotif(order.userId, 'Order Delivered', `Your order ${orderId} has been delivered. Thank you for shopping with us!`);
-        }
+      if (newStatus === 'Cancelled') {
+        await restoreInventory(order as Order);
       }
+
       setToast(`Order ${orderId} → ${newStatus}`);
     } catch (e) {
       console.error(e);
       setToast('Error updating status.');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!window.confirm('Are you sure you want to permanently delete this order from the database? This action cannot be undone.')) return;
+    
+    try {
+      const { error } = await supabase.from('orders').delete().eq('id', orderId);
+      if (error) throw error;
+      
+      refreshOrders();
+      setToast(`Order ${orderId} permanently deleted.`);
+    } catch (e) {
+      console.error(e);
+      setToast('Error deleting order.');
     }
   };
 
@@ -152,18 +186,24 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
 
   const filtered = allOrders.filter((o: Order) => {
     const matchSearch = o.id?.toLowerCase().includes(orderSearch.toLowerCase());
-    const matchFilter = orderFilter === 'All' || o.status === orderFilter;
+    const matchFilter = orderFilter === 'All' || normalizeStatus(o.status) === orderFilter;
     return matchSearch && matchFilter;
   });
 
-  const totalGMV = allOrders.filter((o: Order) => o.status === 'Delivered').reduce((s: number, o: Order) => s + (o.total || 0), 0);
-  const totalCommission = allOrders.filter((o: Order) => o.status === 'Delivered').reduce((s: number, o: Order) => {
+  const totalPages = Math.ceil(filtered.length / ordersPerPage);
+  const displayedOrders = filtered.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
+
+  const totalGMV = allOrders.filter((o: Order) => normalizeStatus(o.status) === 'Delivered').reduce((s: number, o: Order) => s + (o.total || 0), 0);
+  const totalCommission = allOrders.filter((o: Order) => normalizeStatus(o.status) === 'Delivered').reduce((s: number, o: Order) => {
     return s + (o.items || []).reduce((si: number, item: OrderItem) => {
       return si + (item.price || 0) * (item.quantity || 1) * getCommission(item.price || 0);
     }, 0);
   }, 0);
   const statusCounts = { Processing: 0, Shipped: 0, Delivered: 0, Cancelled: 0 } as Record<string, number>;
-  allOrders.forEach((o: Order) => { if (o.status && statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
+  allOrders.forEach((o: Order) => { 
+    const normStatus = normalizeStatus(o.status);
+    if (statusCounts[normStatus] !== undefined) statusCounts[normStatus]++; 
+  });
 
   const statusColor: Record<string, string> = {
     Processing: 'bg-amber-100 text-amber-600',
@@ -199,7 +239,7 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 font-medium">
-                    {o.userName || o.userId || '—'} · ৳{(o.total || 0).toLocaleString()} · Order: {o.status}
+                    {o.userName || o.userId || '—'} · ৳{(o.total || 0).toLocaleString()} · Order: {normalizeStatus(o.status)}
                   </p>
                   {o.cancelReason && (
                     <p className="text-xs text-red-400 font-bold mt-1">
@@ -294,7 +334,7 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
               ))}
             </div>
 
-            {filtered.map((order: Order) => {
+            {displayedOrders.map((order: Order) => {
               const isExpanded = expandedOrder === order.id;
               const commission = (order.items || []).reduce((s: number, item: OrderItem) => {
                 return s + (item.price || 0) * (item.quantity || 1) * getCommission(item.price || 0);
@@ -308,8 +348,8 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
                   >
                     <p className="font-black text-gray-900 text-sm">{order.id}</p>
                     <p className="text-xs font-medium text-gray-500">{order.date}</p>
-                    <span className={`text-[10px] font-black px-2 py-1 rounded-full w-fit ${statusColor[order.status] || 'bg-gray-100 text-gray-500'}`}>
-                      {order.status}
+                    <span className={`inline-flex items-center justify-center h-6 px-3 rounded-full text-[10px] font-black leading-none w-fit ${statusColor[normalizeStatus(order.status)] || 'bg-gray-100 text-gray-500'}`}>
+                      {normalizeStatus(order.status)}
                     </span>
                     <p className="text-xs font-medium text-gray-500">{(order.items || []).length} item{(order.items || []).length !== 1 ? 's' : ''}</p>
                     <p className="text-sm font-black text-gray-900">৳{(order.total || 0).toLocaleString()}</p>
@@ -399,22 +439,33 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
                                   <button
                                     key={s}
                                     onClick={e => { e.stopPropagation(); handleStatusChange(order.id, s); }}
-                                    disabled={order.status === s || order.status === 'Cancelled'}
+                                    disabled={normalizeStatus(order.status) === s || normalizeStatus(order.status) === 'Cancelled' || (normalizeStatus(order.status) === 'Delivered' && s === 'Cancelled')}
                                     className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${
-                                      order.status === s
+                                      normalizeStatus(order.status) === s
                                         ? 'bg-brand-600 text-white border-brand-600 cursor-default'
-                                        : order.status === 'Cancelled'
+                                        : (normalizeStatus(order.status) === 'Cancelled' || (normalizeStatus(order.status) === 'Delivered' && s === 'Cancelled'))
                                         ? 'opacity-40 cursor-not-allowed bg-white text-gray-400 border-gray-200'
                                         : s === 'Cancelled'
                                         ? 'bg-white text-red-400 border-red-200 hover:bg-red-50'
                                         : 'bg-white text-gray-400 border-gray-200 hover:border-brand-400 hover:text-brand-600'
                                     }`}
                                   >
-                                    {order.status === s && <i className="fas fa-check mr-1"></i>}
+                                    {normalizeStatus(order.status) === s && <i className="fas fa-check mr-1"></i>}
                                     {s}
                                   </button>
                                 ))}
                               </div>
+                              {normalizeStatus(order.status) === 'Cancelled' && (
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                  <button
+                                    onClick={e => { e.stopPropagation(); handleDeleteOrder(order.id); }}
+                                    className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-100 hover:text-red-700 transition-all border border-red-100"
+                                  >
+                                    <i className="fas fa-trash-alt mr-2"></i>Delete Order Permanently
+                                  </button>
+                                  <p className="text-[9px] font-medium text-gray-400 mt-2">This will completely remove the order from the database. Cannot be undone.</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -429,7 +480,7 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
                               { k: 'Total Amount', v: '৳' + (order.total || 0).toLocaleString(), highlight: true },
                               { k: 'Commission', v: '৳' + Math.round(commission).toLocaleString(), green: true },
                               { k: 'Customer', v: order.userName || order.userId || '—' },
-                              { k: 'Status', v: order.status },
+                              { k: 'Status', v: normalizeStatus(order.status) },
                             ].map(row => (
                               <div key={row.k} className="bg-white rounded-xl p-3 border border-brand-100">
                                 <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">{row.k}</p>
@@ -444,6 +495,40 @@ const OrderManagementPanel: React.FC<{ setToast: (msg: string) => void }> = ({ s
                 </div>
               );
             })}
+
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 mt-8 mb-8">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-gray-100 text-gray-500 hover:text-brand-600 hover:border-brand-200 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalPages }).map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(idx + 1)}
+                      className={`w-8 h-8 rounded-lg font-black text-xs transition-all ${
+                        currentPage === idx + 1 
+                          ? 'bg-brand-600 text-white shadow-md shadow-brand-200' 
+                          : 'bg-white text-gray-500 border border-gray-100 hover:border-brand-200 hover:text-brand-600'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-gray-100 text-gray-500 hover:text-brand-600 hover:border-brand-200 hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

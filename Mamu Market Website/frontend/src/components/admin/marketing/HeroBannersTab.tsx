@@ -31,11 +31,7 @@ const HeroBannersTab: React.FC<HeroBannersTabProps> = ({ setToast }) => {
     if (heroBanners && Array.isArray(heroBanners.slides)) {
       setSlides(heroBanners.slides);
     } else {
-      setSlides([
-        { id: 1, title: 'Elevate Your Everyday', subtitle: 'Discover premium collections curated for the modern lifestyle.', image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop', buttonText: 'Explore Shop', buttonLink: '/products', expiresAt: null },
-        { id: 2, title: 'The Future of Tech', subtitle: 'Experience cutting-edge innovation from world-class vendors.', image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=1200&auto=format&fit=crop', buttonText: 'Shop Electronics', buttonLink: '/products', expiresAt: null },
-        { id: 3, title: 'Best Gadget and Gear', subtitle: 'Grab the best gadgets and gear from the most trusted sellers.', image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=1200&auto=format&fit=crop', buttonText: 'View Deals', buttonLink: '/deals/flash', expiresAt: null }
-      ]);
+      setSlides([]);
     }
   }, [heroBanners]);
 
@@ -168,6 +164,16 @@ const HeroBannersTab: React.FC<HeroBannersTabProps> = ({ setToast }) => {
                   )}
                 </div>
                 <div className="w-2/3 space-y-4">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Badge Text (Glassmorphic)</label>
+                    <input
+                      type="text"
+                      value={slide.badge !== undefined ? slide.badge : 'New Season Arrival'}
+                      onChange={(e) => handleUpdateSlide(slide.id, 'badge', e.target.value)}
+                      className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none font-black text-xs uppercase tracking-widest border-none"
+                      placeholder="Leave empty to hide badge"
+                    />
+                  </div>
                   <div>
                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Bold Title</label>
                     <input

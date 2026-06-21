@@ -15,12 +15,7 @@ export interface SearchSuggestion {
   type: 'category' | 'brand' | 'keyword';
 }
 
-export interface NotificationPreferences {
-  orderShipped: boolean;
-  flashSales: boolean;
-  newMessages: boolean;
-  reviewReplies: boolean;
-}
+
 
 export interface UserAddress {
   id: string;

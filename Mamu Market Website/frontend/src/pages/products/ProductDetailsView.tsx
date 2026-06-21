@@ -6,11 +6,11 @@ import ProductCard from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
-import { useVendors } from '../../hooks/useVendors';
+import { useSharedProducts, useSharedVendors } from '../../context/DataContext';
 
 import { useReviews } from '../../hooks/useReviews';
 import { supabase } from '../../lib/supabase';
+import PageTitle from '../../components/PageTitle';
 
 const ProductDetailsView: React.FC<{
   product: Product,
@@ -20,7 +20,7 @@ const ProductDetailsView: React.FC<{
   const { handleAddToCart } = useCart();
   const {
     wishlist, handleToggleWishlist, navigateToVendor, handleSelectProduct,
-    recentlyViewed, trackRecentlyViewed
+    recentlyViewed, trackRecentlyViewed, setToast
   } = useApp();
   const userRole = user?.role;
   const isWishlisted = wishlist.includes(product.id);
@@ -28,10 +28,10 @@ const ProductDetailsView: React.FC<{
   const [copied, setCopied] = useState(false);
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'description' | 'reviews' | 'shipping'>('description');
-  const { products: approvedProducts, loading: productsLoading } = useApprovedProducts();
+  const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
   const { reviews: allReviews, refreshReviews } = useReviews({ productId: product.id });
 
-  const { vendors: fetchedVendors } = useVendors();
+  const { vendors: fetchedVendors } = useSharedVendors();
 
   const resolvedVendorName = React.useMemo(() => {
     if (!product.vendorId) return product.vendor;
@@ -48,12 +48,13 @@ const ProductDetailsView: React.FC<{
       setActiveTab((location.state as any).activeTab);
     }
   }, [location]);
-  const [selectedColor, setSelectedColor] = useState(product.colors?.[0]?.name || null);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState(product.image);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
 
+  const [submittingReview, setSubmittingReview] = useState(false);
   const [reportModal, setReportModal] = useState<{ reviewId: string } | null>(null);
   const [reportReason, setReportReason] = useState('');
   const [productReportModal, setProductReportModal] = useState(false);
@@ -66,7 +67,7 @@ const ProductDetailsView: React.FC<{
 
   useEffect(() => {
     setActiveImage(product.image);
-    setSelectedColor(product.colors?.[0]?.name || null);
+    setSelectedColor(null);
     setQuantity(1);
     window.scrollTo(0, 0);
     // Track recently viewed
@@ -108,18 +109,25 @@ const ProductDetailsView: React.FC<{
 
   const localVendor = fetchedVendors.find(u => u.id === product.vendorId);
 
-  const vendor = localVendor ? {
-    id: localVendor.id,
-    name: localVendor.name,
-    logo: localVendor.logo || '',
-    banner: localVendor.banner || '',
-    category: localVendor.category || 'General',
-    rating: localVendor.rating !== undefined ? localVendor.rating : 0,
-    productsCount: approvedProducts.filter((p: Product) => p.vendorId === localVendor.id).length,
-    verified: localVendor.verified || false,
-    joinedDate: localVendor.joinedDate || new Date().toISOString().split('T')[0],
-    description: localVendor.description || `Welcome to ${localVendor.name}'s store.`
-  } : null;
+  const vendor = localVendor ? (() => {
+    const vendorProducts = approvedProducts.filter((p: Product) => p.vendorId === localVendor.id);
+    const ratedProducts = vendorProducts.filter(p => p.rating > 0);
+    const computedRating = ratedProducts.length > 0
+      ? Math.round((ratedProducts.reduce((sum, p) => sum + Number(p.rating), 0) / ratedProducts.length) * 10) / 10
+      : 0;
+    return {
+      id: localVendor.id,
+      name: localVendor.name,
+      logo: localVendor.logo || '',
+      banner: localVendor.banner || '',
+      category: localVendor.category || 'General',
+      rating: computedRating,
+      productsCount: vendorProducts.length,
+      verified: localVendor.verified || false,
+      joinedDate: localVendor.joinedDate || new Date().toISOString().split('T')[0],
+      description: localVendor.description || `Welcome to ${localVendor.name}'s store.`
+    };
+  })() : null;
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,30 +136,81 @@ const ProductDetailsView: React.FC<{
       return;
     }
 
-    const hasRated = allReviews.some((r: Review) => r.userId === user.id && r.rating > 0);
-    const finalRating = hasRated ? 0 : reviewForm.rating;
+    if (!reviewForm.comment.trim()) {
+      setToast?.('Please write a comment before submitting.');
+      return;
+    }
+
+    const finalRating = reviewForm.rating;
 
     const san = (s: string) => (s || '').trim().replace(/[<>]/g, '');
     
+    setSubmittingReview(true);
     try {
       const { error } = await supabase.from('reviews').insert({
         user_id: user.id,
         user_name: user.name,
-        user_avatar: user.avatar,
+        user_avatar: user.avatar || '',
         rating: finalRating,
         comment: san(reviewForm.comment),
         product_id: product.id,
         product_name: product.name,
-        product_image: product.image,
-        date: new Date().toISOString()
+        product_image: product.image || ''
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Review insert error:', error.message, error.details, error.hint);
+        setToast?.('Failed to post review: ' + error.message);
+        return;
+      }
       
+      // Update the product's rating via Edge Function (bypasses RLS)
+      let ratingUpdated = false;
+      try {
+        const { data: fnData, error: fnError } = await supabase.functions.invoke('update-product-rating', {
+          body: { product_id: product.id }
+        });
+        console.log('Rating update response:', fnData, fnError);
+        if (fnError) {
+          console.error('Product rating Edge Function error:', fnError);
+        } else if (fnData?.success) {
+          ratingUpdated = true;
+        }
+      } catch (ratingErr) {
+        console.error('Product rating Edge Function failed:', ratingErr);
+      }
+
+      // Fallback: direct DB update if Edge Function failed
+      if (!ratingUpdated) {
+        try {
+          const { data: freshReviews } = await supabase
+            .from('reviews')
+            .select('rating')
+            .eq('product_id', product.id);
+          
+          const allRevs = freshReviews || [];
+          const rated = allRevs.filter((r: any) => Number(r.rating) > 0);
+          const avg = rated.length > 0
+            ? Math.round((rated.reduce((s: number, r: any) => s + Number(r.rating), 0) / rated.length) * 10) / 10
+            : 0;
+          
+          await supabase.from('products').update({
+            rating: avg,
+            reviews_count: allRevs.length
+          }).eq('id', product.id);
+        } catch (fallbackErr) {
+          console.error('Rating fallback update failed:', fallbackErr);
+        }
+      }
+
       setReviewForm({ rating: 5, comment: '' });
+      setToast?.('Review posted successfully!');
       refreshReviews();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Review submit error:', err);
+      setToast?.('Failed to post review: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -161,6 +220,7 @@ const ProductDetailsView: React.FC<{
       animate={{ opacity: 1 }}
       className="container mx-auto px-4 py-12 lg:py-20"
     >
+      <PageTitle title={product.name} />
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 mb-24 relative">
         {/* Image Gallery */}
         <div className="w-full lg:w-[40%] shrink-0 space-y-6">
@@ -200,14 +260,17 @@ const ProductDetailsView: React.FC<{
             })()}
           </div>
 
-          <div className="grid grid-cols-4 gap-4">
-            {[product.image, ...(product.images || []), ...(product.colors?.map(c => c.image) || [])].filter((v, i, a) => a.indexOf(v) === i).slice(0, 4).map((img, i) => (
+          <div className="flex overflow-x-auto gap-4 pb-4 snap-x scrollbar-hide">
+            {[product.image, ...(product.images || []), ...(product.colors?.map(c => c.image) || [])]
+              .filter(Boolean)
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .map((img, i) => (
               <button
                 key={i}
                 onClick={() => setActiveImage(img)}
-                className={`aspect-square rounded-2xl overflow-hidden border-2 transition-all ${activeImage === img ? 'border-brand-600 scale-95 shadow-lg' : 'border-transparent hover:border-gray-200'}`}
+                className={`shrink-0 w-24 h-24 snap-start rounded-2xl overflow-hidden border-2 transition-all ${activeImage === img ? 'border-brand-600 scale-95 shadow-lg' : 'border-transparent hover:border-gray-200'}`}
               >
-                {img && <img src={img} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt="Gallery" />}
+                <img src={img} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt={`Gallery ${i + 1}`} />
               </button>
             ))}
           </div>
@@ -238,11 +301,22 @@ const ProductDetailsView: React.FC<{
                 {product.category} {product.subcategory && <span className="text-gray-400 mx-1">/</span>} {product.subcategory}
               </span>
               <div className="flex items-center gap-2">
-                <div className="flex text-amber-400 gap-0.5">
-                  {[1, 2, 3, 4, 5].map(s => <i key={s} className={`fas fa-star text-[10px] ${s <= Math.floor(product.rating) ? '' : 'text-gray-200'}`}></i>)}
-                </div>
-                <span className="text-xs font-black text-gray-900">{product.rating}</span>
-                <span className="text-xs font-bold text-gray-400">({product.reviewsCount} reviews)</span>
+                {(() => {
+                  const ratedReviews = allReviews.filter((r: any) => r.rating > 0);
+                  const liveCount = allReviews.length;
+                  const liveRating = ratedReviews.length > 0
+                    ? Math.round((ratedReviews.reduce((sum: number, r: any) => sum + Number(r.rating), 0) / ratedReviews.length) * 10) / 10
+                    : Number(product.rating) || 0;
+                  return (
+                    <>
+                      <div className="flex text-amber-400 gap-0.5">
+                        {[1, 2, 3, 4, 5].map(s => <i key={s} className={`fas fa-star text-[10px] ${s <= Math.floor(liveRating) ? '' : 'text-gray-200'}`}></i>)}
+                      </div>
+                      <span className="text-xs font-black text-gray-900">{liveRating}</span>
+                      <span className="text-xs font-bold text-gray-400">({liveCount} reviews)</span>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -266,7 +340,7 @@ const ProductDetailsView: React.FC<{
             })()}
 
             <div className="flex items-start gap-3 mb-4">
-              <h1 className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter leading-tight flex-1">{product.name}</h1>
+              <h1 className="text-2xl lg:text-3xl font-black text-gray-900 tracking-tight leading-snug flex-1">{product.name}</h1>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
@@ -401,7 +475,9 @@ const ProductDetailsView: React.FC<{
             )}
           </div>
 
-          <p className="text-gray-500 font-medium leading-relaxed text-lg">{product.description}</p>
+          <p className="text-gray-500 font-medium leading-relaxed text-lg whitespace-pre-wrap">
+            {product.shortDescription || (product.description ? (product.description.length > 150 ? product.description.substring(0, 150) + '...' : product.description) : '')}
+          </p>
 
           {/* Vendor Info Card */}
           {vendor && (
@@ -454,7 +530,7 @@ const ProductDetailsView: React.FC<{
           ))}
         </div>
 
-        <div className="max-w-4xl">
+        <div className="max-w-3xl">
           <AnimatePresence mode="wait">
             {activeTab === 'description' && (
               <motion.div
@@ -463,9 +539,40 @@ const ProductDetailsView: React.FC<{
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-8"
               >
-                <div className="prose prose-lg max-w-none text-gray-500 font-medium leading-relaxed">
+                <div className="text-gray-600 font-medium leading-loose text-[15px]">
                   {product.description ? (
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{product.description}</p>
+                    (() => {
+                      const text = product.description;
+                      // If the vendor used a Rich Text Editor and saved HTML
+                      if (/<[a-z][\s\S]*>/i.test(text)) {
+                        return <div dangerouslySetInnerHTML={{ __html: text }} className="text-justify" />;
+                      }
+                      
+                      // Otherwise parse plain text with newlines and markdown-like formatting
+                      const parseFormatting = (str: string) => {
+                        return str
+                          .replace(/\*\*(.*?)\*\*/g, '<strong class="font-black text-gray-900">$1</strong>')
+                          .replace(/\*(.*?)\*/g, '<em class="italic text-gray-800">$1</em>');
+                      };
+
+                      return (
+                        <div className="space-y-6 text-justify">
+                          {text.split('\n').map((paragraph, index) => {
+                            if (!paragraph.trim()) return null;
+                            if (paragraph.trim().startsWith('- ') || paragraph.trim().startsWith('• ')) {
+                              return (
+                                <ul key={index} className="list-disc pl-5 my-2 space-y-2">
+                                  <li dangerouslySetInnerHTML={{ __html: parseFormatting(paragraph.trim().substring(2)) }} />
+                                </ul>
+                              );
+                            }
+                            return (
+                              <p key={index} dangerouslySetInnerHTML={{ __html: parseFormatting(paragraph.trim()) }} />
+                            );
+                          })}
+                        </div>
+                      );
+                    })()
                   ) : (
                     <p className="text-gray-400 italic">No description provided for this product.</p>
                   )}
@@ -480,83 +587,107 @@ const ProductDetailsView: React.FC<{
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-12"
               >
-                {/* Review Form */}
-                {user && userRole !== 'vendor' ? (
-                  <div className="bg-gray-50 rounded-[2.5rem] p-10 border border-gray-100">
-                    {(() => {
-                      const hasRated = allReviews.some((r: Review) => r.userId === user.id && r.rating > 0);
-                      return (
-                        <>
-                          <h4 className="text-xl font-black text-gray-900 mb-2">
-                            {hasRated ? 'Add a Comment' : 'Write a Review'}
-                          </h4>
-                          {hasRated && (
-                            <p className="text-xs text-gray-400 font-medium mb-6">
-                              You have already rated this product. You can still leave additional comments.
-                            </p>
-                          )}
-                          <form onSubmit={handleReviewSubmit} className="space-y-6">
-                            {/* Conditional rating stars */}
-                            {!hasRated && (
-                              <div className="flex items-center gap-4 mb-4">
-                                <span className="text-sm font-bold text-gray-500">Your Rating:</span>
-                                <div className="flex gap-2">
-                                  {[1, 2, 3, 4, 5].map(star => (
-                                    <button
-                                      key={star}
-                                      type="button"
-                                      onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
-                                      className={`text-2xl transition-all ${star <= reviewForm.rating ? 'text-amber-400 scale-110' : 'text-gray-200 hover:text-amber-200'}`}
-                                    >
-                                      <i className="fas fa-star"></i>
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
+                {user ? (
+                  userRole !== 'vendor' ? (
+                    <div className="bg-gray-50 rounded-[2.5rem] p-10 border border-gray-100">
+                      {(() => {
+                        const hasRated = allReviews.some((r: Review) => (r.userId === user.id || (r as any).user_id === user.id) && r.rating > 0);
+                        return (
+                          <>
+                            <h4 className="text-xl font-black text-gray-900 mb-2">
+                              {hasRated ? 'Add a Comment' : 'Write a Review'}
+                            </h4>
+                            {hasRated && (
+                              <p className="text-xs text-gray-400 font-medium mb-6">
+                                You have already rated this product. You can still leave additional comments.
+                              </p>
                             )}
-                            <textarea
-                              required
-                              value={reviewForm.comment}
-                              onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
-                              placeholder={hasRated ? 'Add more thoughts about this product...' : 'Share your experience with this product...'}
-                              className="w-full bg-white border-none rounded-2xl px-8 py-6 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all font-medium resize-none shadow-sm"
-                              rows={4}
-                            />
-                            <button type="submit" className="px-10 py-4 gradient-primary text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-500/20 hover:scale-105 active:scale-95 transition-all">
-                              {hasRated ? 'Post Comment' : 'Post Review'}
-                            </button>
-                          </form>
-                        </>
-                      );
-                    })()}
-                  </div>
+                            <form onSubmit={handleReviewSubmit} className="space-y-6">
+                              {!hasRated && (
+                                <div className="flex items-center gap-4 mb-4">
+                                  <span className="text-sm font-bold text-gray-500">Your Rating:</span>
+                                  <div className="flex gap-2">
+                                    {[1, 2, 3, 4, 5].map(star => (
+                                      <button
+                                        key={star}
+                                        type="button"
+                                        onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
+                                        className={`text-2xl transition-all ${star <= reviewForm.rating ? 'text-amber-400 scale-110' : 'text-gray-200 hover:text-amber-200'}`}
+                                      >
+                                        <i className="fas fa-star"></i>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              <textarea
+                                required
+                                value={reviewForm.comment}
+                                onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                                placeholder={hasRated ? 'Add more thoughts about this product...' : 'Share your experience with this product...'}
+                                className="w-full bg-white border-none rounded-2xl px-8 py-6 outline-none focus:ring-4 focus:ring-brand-500/10 transition-all font-medium resize-none shadow-sm"
+                                rows={4}
+                              />
+                              <button type="submit" disabled={submittingReview} className="px-10 py-4 bg-brand-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-brand-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                                {submittingReview ? (
+                                  <><i className="fas fa-spinner fa-spin mr-2"></i>Posting...</>
+                                ) : (
+                                  hasRated ? 'Post Comment' : 'Post Review'
+                                )}
+                              </button>
+                            </form>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-[2.5rem] p-10 border border-gray-100 text-center">
+                      <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-brand-500 text-2xl shadow-sm">
+                        <i className="fas fa-store-slash"></i>
+                      </div>
+                      <h4 className="text-gray-900 font-black mb-2">Merchant Accounts Cannot Review</h4>
+                      <p className="text-gray-500 font-medium text-sm leading-relaxed max-w-md mx-auto">
+                        Vendor accounts are restricted from leaving product reviews to maintain platform integrity. Please log in with a standard customer account to share your experience.
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <div className="bg-gray-50 rounded-[2.5rem] p-10 border border-gray-100 text-center">
                     <p className="text-gray-500 font-bold mb-6">Please sign in to share your thoughts.</p>
-                    <button onClick={() => navigate('/user-login')} className="px-8 py-3 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest">Sign In Now</button>
+                    <button onClick={() => navigate('/user-login')} className="px-8 py-3 bg-gray-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">Sign In Now</button>
                   </div>
                 )}
 
                 <div className="space-y-8">
                   {allReviews.map((review) => (
-                    <div key={review.id} className="flex gap-8 p-8 rounded-[2rem] bg-white border border-gray-50 shadow-sm">
-                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 shrink-0 shadow-lg">
-                        {review.userAvatar && <img src={review.userAvatar} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt={review.userName} />}
+                    <div key={review.id} className="flex gap-8 p-8 rounded-[2rem] bg-white border border-gray-50 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 shrink-0 shadow-lg flex items-center justify-center text-gray-400 font-black text-xl">
+                        {(review.userAvatar || (review as any).user_avatar) ? (
+                          <img src={review.userAvatar || (review as any).user_avatar} referrerPolicy="no-referrer" className="w-full h-full object-cover" alt={review.userName || (review as any).user_name} />
+                        ) : (
+                          (review.userName || (review as any).user_name || 'A').charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-2">
-                          <h5 className="font-black text-gray-900">{review.userName}</h5>
+                          <h5 className="font-black text-gray-900">{review.userName || (review as any).user_name || 'Anonymous'}</h5>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{(() => {
-                              if (!review.date || review.date === 'Just now') return 'Just now';
-                              const diff = Date.now() - new Date(review.date).getTime();
+                              const d = review.date;
+                              if (!d) return 'Just now';
+                              const parsed = new Date(d);
+                              if (isNaN(parsed.getTime())) return 'Just now';
+                              const diff = Date.now() - parsed.getTime();
+                              if (diff < 0) return 'Just now';
+                              const minutes = Math.floor(diff / (1000 * 60));
+                              if (minutes < 1) return 'Just now';
+                              if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
                               const hours = Math.floor(diff / (1000 * 60 * 60));
-                              if (hours < 1) return 'Just now';
                               if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
                               const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                               return `${days} day${days > 1 ? 's' : ''} ago`;
                             })()}</span>
-                            {user && user.name !== review.userName && (
+                            {user && user.id !== review.userId && user.id !== (review as any).user_id && (
                               <button onClick={() => {
                                 if (reportedReviewIds.includes(review.id)) return;
                                 setReportModal({ reviewId: review.id });
@@ -573,7 +704,20 @@ const ProductDetailsView: React.FC<{
                           </div>
                         )}
                         <p className="text-gray-500 font-medium leading-relaxed">{review.comment}</p>
-
+                        {review.vendorReply && (
+                          <div className="mt-6 bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                            <div className="flex items-center gap-2 mb-2">
+                              <i className="fas fa-store text-brand-600 text-xs"></i>
+                              <span className="text-xs font-black uppercase tracking-widest text-brand-600">Vendor Reply</span>
+                              {review.vendorReplyDate && (
+                                <span className="text-[10px] text-gray-400 font-bold ml-auto">
+                                  {new Date(review.vendorReplyDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-600 text-sm font-medium leading-relaxed">{review.vendorReply}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -589,20 +733,53 @@ const ProductDetailsView: React.FC<{
                 className="space-y-12"
               >
                 <div className="grid md:grid-cols-2 gap-12">
-                  <div className="space-y-6">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-xl">
-                      <i className="fas fa-truck"></i>
+                  {product.shippingReturnPolicy ? (
+                    <div className="col-span-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {product.shippingReturnPolicy.split('\n').map((line, i) => {
+                          if (!line.trim()) return null;
+                          const [title, ...rest] = line.split(':');
+                          const value = rest.join(':').trim();
+                          
+                          let icon = 'fas fa-info-circle';
+                          let colorClass = 'bg-gray-100 text-gray-500';
+                          if (title.toLowerCase().includes('warranty')) { icon = 'fas fa-shield-alt'; colorClass = 'bg-blue-50 text-blue-500'; }
+                          else if (title.toLowerCase().includes('guarantee')) { icon = 'fas fa-certificate'; colorClass = 'bg-emerald-50 text-emerald-500'; }
+                          else if (title.toLowerCase().includes('return')) { icon = 'fas fa-undo'; colorClass = 'bg-amber-50 text-amber-500'; }
+                          else if (title.toLowerCase().includes('delivery') || title.toLowerCase().includes('shipping')) { icon = 'fas fa-truck'; colorClass = 'bg-purple-50 text-purple-500'; }
+
+                          return (
+                            <div key={i} className="flex gap-4 p-5 rounded-2xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all">
+                              <div className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center text-lg ${colorClass}`}>
+                                <i className={icon}></i>
+                              </div>
+                              <div>
+                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title.trim()}</h5>
+                                <p className="text-gray-900 font-bold text-sm">{value || 'Not Specified'}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <h4 className="text-xl font-black text-gray-900">Fast Delivery</h4>
-                    <p className="text-gray-500 font-medium leading-relaxed">Standard shipping takes 3-5 business days. Express options available at checkout for next-day delivery.</p>
-                  </div>
-                  <div className="space-y-6">
-                    <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl">
-                      <i className="fas fa-undo"></i>
-                    </div>
-                    <h4 className="text-xl font-black text-gray-900">Easy Returns</h4>
-                    <p className="text-gray-500 font-medium leading-relaxed">Not satisfied? Return your item within 30 days for a full refund. No questions asked.</p>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="space-y-6">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center text-xl">
+                          <i className="fas fa-truck"></i>
+                        </div>
+                        <h4 className="text-xl font-black text-gray-900">Fast Delivery</h4>
+                        <p className="text-gray-500 font-medium leading-relaxed">Standard shipping takes 3-5 business days. Express options available at checkout for next-day delivery.</p>
+                      </div>
+                      <div className="space-y-6">
+                        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center text-xl">
+                          <i className="fas fa-undo"></i>
+                        </div>
+                        <h4 className="text-xl font-black text-gray-900">Easy Returns</h4>
+                        <p className="text-gray-500 font-medium leading-relaxed">Not satisfied? Return your item within 30 days for a full refund. No questions asked.</p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import PageTitle from '../../components/PageTitle';
 import { motion } from 'motion/react';
 import { supabase } from '../../lib/supabase';
 
@@ -32,6 +34,7 @@ const ResetPasswordView: React.FC = () => {
   };
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <PageTitle title="Reset Password" />
       {/* Gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-brand-900 via-brand-700 to-purple-500" />
       

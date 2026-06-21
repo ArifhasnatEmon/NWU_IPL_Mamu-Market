@@ -1,7 +1,8 @@
 import React from 'react';
-import { pushNotif } from '../../utils/notifications';
+
 import { useApprovedProducts } from '../../hooks/useProducts';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
+import { supabase } from '../../lib/supabase';
 import { Product, User, VendorRequest, ProductUpdate, AdminDashboardData } from '../../types';
 
 interface ApprovalsPanelProps {
@@ -16,20 +17,29 @@ interface ApprovalsPanelProps {
   handleRemoveRequest: (requestId: string, approve: boolean) => void;
   handleUpdateApproval: (updateId: string, approve: boolean) => void;
   handleCategoryRequest: (reqId: string, approve: boolean) => void;
+  handleCategorySuggestion: (reqId: string, approve: boolean) => void;
   handleStoreNameRequest: (reqId: string, approve: boolean) => void;
 }
 
 const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({ 
   activeTab, data, setToast, refreshData,
   handleAccountDeleteRequest, handleVendorAction, handleVerificationRequest,
-  handleProductApproval, handleRemoveRequest, handleUpdateApproval, handleCategoryRequest, handleStoreNameRequest
+  handleProductApproval, handleRemoveRequest, handleUpdateApproval, handleCategoryRequest, handleCategorySuggestion, handleStoreNameRequest
 }) => {
   const { products: approvedProducts } = useApprovedProducts();
   const [rejectModal, setRejectModal] = React.useState(false);
   const [rejectTarget, setRejectTarget] = React.useState<Product | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
   const [customRejectReason, setCustomRejectReason] = React.useState('');
+  const [processingId, setProcessingId] = React.useState<string | null>(null);
   const { requests, updateRequestStatus } = useVendorRequests();
+
+  const onApproveProduct = async (pId: string) => {
+    if (processingId) return;
+    setProcessingId(pId);
+    await handleProductApproval(pId, true);
+    setProcessingId(null);
+  };
 
   return (
     <>
@@ -296,14 +306,17 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
 
                         <div className="flex gap-3">
                           <button 
-                            onClick={() => handleProductApproval(p.id, true)}
-                            className="bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-emerald-600 transition-colors"
+                            onClick={() => onApproveProduct(p.id)}
+                            disabled={processingId === p.id}
+                            className="bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center gap-2"
                           >
+                            {processingId === p.id ? <i className="fas fa-spinner fa-spin"></i> : null}
                             Approve
                           </button>
                           <button 
                             onClick={() => { setRejectTarget(p); setRejectModal(true); setRejectReason(''); setCustomRejectReason(''); }}
-                            className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 transition-colors"
+                            disabled={!!processingId}
+                            className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 disabled:opacity-50 transition-colors"
                           >
                             Reject
                           </button>
@@ -409,28 +422,32 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
               {data.removeRequests.length > 0 ? (
                 data.removeRequests.map((r: VendorRequest) => (
                   <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-6 mb-4 shadow-sm">
-                    <div className="mb-4">
-                      <h3 className="font-black text-gray-900">{r.current_value || 'Product'}</h3>
-                      <p className="text-gray-400 text-sm font-medium">Vendor: {r.vendor_name}</p>
-                      {r.reason && (
-                        <p className="text-gray-500 text-sm font-medium mt-2 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                          💬 "{r.reason}"
-                        </p>
-                      )}
-                      {r.created_at && (
-                        <p className="text-gray-400 text-xs font-bold mt-1">{new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                      )}
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="font-black text-gray-900 text-lg">{r.requested_value || r.current_value || 'Product'}</h3>
+                        <p className="text-gray-400 text-sm font-medium">Vendor: <span className="text-gray-700 font-bold">{r.vendor_name}</span></p>
+                        <p className="text-gray-300 text-[10px] font-mono mt-1">ID: {r.current_value}</p>
+                        {r.reason && (
+                          <p className="text-gray-500 text-sm font-medium mt-3 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+                            💬 "{r.reason}"
+                          </p>
+                        )}
+                        {r.created_at && (
+                          <p className="text-gray-400 text-xs font-bold mt-2">{new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        )}
+                      </div>
+                      <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0">Product Removal</span>
                     </div>
                     <div className="flex gap-3">
                       <button 
                         onClick={() => handleRemoveRequest(r.id, true)}
                         className="bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-emerald-600 transition-colors"
                       >
-                        Approve Removal
+                        Approve & Delete Product
                       </button>
                       <button 
                         onClick={() => handleRemoveRequest(r.id, false)}
-                        className="bg-red-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-red-600 transition-colors"
+                        className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 transition-colors"
                       >
                         Deny
                       </button>
@@ -447,7 +464,7 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
             <div className="space-y-8">
               <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-8">
                 <h3 className="font-black text-gray-900 mb-1">Category Requests</h3>
-                <p className="text-xs text-gray-400 font-medium mb-6">Review vendor requests to add new categories</p>
+                <p className="text-xs text-gray-400 font-medium mb-6">Vendors requesting to add an existing platform category to their store</p>
                 {data.categoryRequests?.length > 0 ? (
                   <div className="space-y-4">
                     {data.categoryRequests.map((r: VendorRequest) => (
@@ -455,7 +472,7 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                         <div className="flex justify-between items-start mb-4">
                           <div>
                             <h3 className="font-black text-gray-900">{r.vendor_name}</h3>
-                            <p className="text-gray-400 text-sm font-medium">Requested Category: <span className="text-brand-600 font-bold">{r.requested_value || ''}</span></p>
+                            <p className="text-gray-400 text-sm font-medium">Wants to add: <span className="text-brand-600 font-bold">{r.requested_value || ''}</span></p>
                             {r.reason && (
                               <p className="text-gray-500 text-sm font-medium mt-1 bg-white rounded-xl px-3 py-2 border border-gray-100 shadow-sm">
                                 💬 "{r.reason}"
@@ -465,17 +482,17 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                               <p className="text-gray-400 text-xs font-bold mt-1">{new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             )}
                           </div>
-                          <span className="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">Pending</span>
+                          <span className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">Add to Store</span>
                         </div>
                         <div className="flex gap-3">
                           <button 
-                            onClick={() => { handleCategoryRequest(r.id, true); pushNotif(r.vendor_id, 'Category Suggestion Acknowledged', `Thank you! Your suggestion for the "${r.requested_value || ''}" category has been noted and will be evaluated for our global platform.`); }}
+                            onClick={() => { handleCategoryRequest(r.id, true); }}
                             className="bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-emerald-600 transition-colors"
                           >
-                            Acknowledge Idea
+                            Approve & Add Category
                           </button>
                           <button 
-                            onClick={() => { handleCategoryRequest(r.id, false); pushNotif(r.vendor_id, 'Category Request Rejected', `Your request to add "${r.requested_value || ''}" category was not approved.`); }}
+                            onClick={() => { handleCategoryRequest(r.id, false); }}
                             className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 transition-colors"
                           >
                             Reject
@@ -486,6 +503,50 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                   </div>
                 ) : (
                   <p className="text-gray-400 font-bold text-sm italic py-8 text-center">No pending category requests</p>
+                )}
+              </div>
+
+              <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-8">
+                <h3 className="font-black text-gray-900 mb-1">Category Suggestions</h3>
+                <p className="text-xs text-gray-400 font-medium mb-6">Vendors suggesting new categories for the platform. Acknowledging will add it to Category Management.</p>
+                {data.categorySuggestions?.length > 0 ? (
+                  <div className="space-y-4">
+                    {data.categorySuggestions.map((r: VendorRequest) => (
+                      <div key={r.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="font-black text-gray-900">{r.vendor_name}</h3>
+                            <p className="text-gray-400 text-sm font-medium">Suggested Category: <span className="text-purple-600 font-bold">{r.requested_value || ''}</span></p>
+                            {r.reason && (
+                              <p className="text-gray-500 text-sm font-medium mt-1 bg-white rounded-xl px-3 py-2 border border-gray-100 shadow-sm">
+                                💬 "{r.reason}"
+                              </p>
+                            )}
+                            {r.created_at && (
+                              <p className="text-gray-400 text-xs font-bold mt-1">{new Date(r.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                            )}
+                          </div>
+                          <span className="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">New Idea</span>
+                        </div>
+                        <div className="flex gap-3">
+                          <button 
+                            onClick={() => { handleCategorySuggestion(r.id, true); }}
+                            className="bg-purple-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-purple-600 transition-colors"
+                          >
+                            Acknowledge & Add to Platform
+                          </button>
+                          <button 
+                            onClick={() => { handleCategorySuggestion(r.id, false); }}
+                            className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 transition-colors"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-400 font-bold text-sm italic py-8 text-center">No pending category suggestions</p>
                 )}
               </div>
 
@@ -510,13 +571,13 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                         </div>
                         <div className="flex gap-3">
                           <button 
-                            onClick={() => { handleStoreNameRequest(r.id, true); pushNotif(r.vendor_id, 'Store Name Updated', `Your store name has been changed to "${r.requested_value || ''}".`); }}
+                            onClick={() => { handleStoreNameRequest(r.id, true); }}
                             className="bg-emerald-500 text-white rounded-xl px-4 py-2 text-xs font-black hover:bg-emerald-600 transition-colors"
                           >
                             Approve
                           </button>
                           <button 
-                            onClick={() => { handleStoreNameRequest(r.id, false); pushNotif(r.vendor_id, 'Store Name Change Rejected', `Your request to change store name to "${r.requested_value || ''}" was not approved.`); }}
+                            onClick={() => { handleStoreNameRequest(r.id, false); }}
                             className="bg-red-50 text-red-500 rounded-xl px-4 py-2 text-xs font-black hover:bg-red-100 transition-colors"
                           >
                             Reject
@@ -546,12 +607,12 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                           <div className="flex gap-3 mt-4">
                             <button onClick={async () => {
                               await updateRequestStatus(r.id, 'approved');
-                              pushNotif(r.vendor_id, 'City Change Approved', `Your store location has been updated to ${r.requested_value}.`);
+                              
                               refreshData();
                             }} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-black text-xs hover:bg-emerald-600">Approve</button>
                             <button onClick={async () => {
                               await updateRequestStatus(r.id, 'rejected');
-                              pushNotif(r.vendor_id, 'City Change Rejected', `Your request to change store city to ${r.requested_value} was not approved.`);
+                              
                               refreshData();
                             }} className="px-4 py-2 bg-red-50 text-red-500 rounded-xl font-black text-xs hover:bg-red-100">Reject</button>
                           </div>
@@ -577,8 +638,24 @@ const ApprovalsPanel: React.FC<ApprovalsPanelProps> = ({
                           <p className="text-xs text-gray-400 mt-1">Reason: {r.reason}</p>
                           <div className="flex gap-3 mt-4">
                             <button onClick={async () => {
+                              // Actually remove the category from the vendor's profile
+                              const { data: vendorProfile } = await supabase
+                                .from('profiles')
+                                .select('store_category')
+                                .eq('id', r.vendor_id)
+                                .single();
+                              if (vendorProfile) {
+                                const currentCats = (vendorProfile.store_category || '')
+                                  .split(',')
+                                  .map((c: string) => c.trim())
+                                  .filter(Boolean)
+                                  .filter((c: string) => c.toLowerCase() !== (r.current_value || '').trim().toLowerCase());
+                                await supabase
+                                  .from('profiles')
+                                  .update({ store_category: currentCats.join(', ') })
+                                  .eq('id', r.vendor_id);
+                              }
                               await updateRequestStatus(r.id, 'approved');
-                              pushNotif(r.vendor_id, 'Category Removed', `"${r.current_value}" category has been removed from your store.`);
                               refreshData();
                             }} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-black text-xs hover:bg-emerald-600">Approve</button>
                             <button onClick={async () => {

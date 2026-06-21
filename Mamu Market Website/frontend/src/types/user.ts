@@ -64,7 +64,7 @@ export interface VendorRequest {
   id: string;
   vendor_id: string;
   vendor_name: string;
-  request_type: 'store_name' | 'city_change' | 'category_add' | 'category_remove' | 'verification' | 'email_change' | 'account_delete' | 'product_remove';
+  request_type: 'store_name' | 'city_change' | 'category_add' | 'category_suggest' | 'category_remove' | 'verification' | 'email_change' | 'account_delete' | 'product_remove';
   current_value?: string;
   requested_value?: string;
   reason?: string;

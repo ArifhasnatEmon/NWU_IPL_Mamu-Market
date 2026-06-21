@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import ImageCropperModal from '../../components/ui/ImageCropperModal';
-import { User, UserAddress, NotificationPreferences } from '../../types';
+import { User, UserAddress } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { uploadImage } from '../../utils/imageUpload';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
@@ -47,9 +48,7 @@ const SettingsView: React.FC = () => {
   });
   const [newAddressLabel, setNewAddressLabel] = useState('');
   const [newAddressText, setNewAddressText] = useState('');
-  const [notifications, setNotifications] = useState<NotificationPreferences>(() => {
-    return (user as any)?.notifications || { orderShipped: true, flashSales: false, newMessages: true, reviewReplies: true };
-  });
+
 
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [upImg, setUpImg] = useState<string | null>(null);
@@ -68,7 +67,7 @@ const SettingsView: React.FC = () => {
       setToast('Updating profile...');
       // Future Supabase: Upload avatar if changed
       let avatarUrl = avatar;
-      if (avatar && avatar.startsWith('data:')) {
+      if (avatar && (avatar.startsWith('data:') || avatar.startsWith('blob:'))) {
          avatarUrl = await uploadImage(avatar, 'avatars');
       }
 
@@ -97,6 +96,11 @@ const SettingsView: React.FC = () => {
 
       if (dbErr) throw dbErr;
 
+      // Also update Supabase auth metadata so name/avatar sync to auth user list
+      await supabase.auth.updateUser({
+        data: { name, avatar: avatarUrl }
+      });
+
       setUser({ ...user, ...updated, socialFacebook, socialInstagram, socialYoutube, socialWhatsapp } as any);
       
       if (phoneChanged && phone) {
@@ -112,7 +116,7 @@ const SettingsView: React.FC = () => {
 
   const handleChangePassword = async () => {
     setPassError('');
-    if (newPass.length < 6) { setPassError('Password must be at least 6 characters.'); return; }
+    if (newPass.length < 8) { setPassError('Password must be at least 8 characters.'); return; }
     if (newPass !== confirmPass) { setPassError('Passwords do not match!'); return; }
     
     try {
@@ -249,30 +253,14 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  const handleSaveNotifications = async () => {
-    try {
-      if (user?.id) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ notification_preferences: notifications })
-          .eq('id', user.id);
-        if (error) throw error;
-      }
-      setUser({ ...user, notifications } as any);
-      setToast('Notification preferences saved.');
-      setActiveTab('notifications');
-    } catch (err: any) {
-      console.error(err);
-      setToast('Error saving notification preferences');
-    }
-  };
+
 
   const tabs = [
     { id: 'general', label: 'General', icon: 'fa-user' },
     { id: 'security', label: 'Password & Security', icon: 'fa-shield-alt' },
     ...(user?.role === 'vendor' ? [{ id: 'social', label: 'Social Media', icon: 'fa-share-alt' }] : []),
     ...(user?.role === 'customer' ? [{ id: 'addresses', label: 'Address Book', icon: 'fa-map-marker-alt' }] : []),
-    ...(user?.role === 'customer' ? [{ id: 'notifications', label: 'Notifications', icon: 'fa-bell' }] : []),
+
   ];
 
   const inputClass = "w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold";
@@ -280,6 +268,7 @@ const SettingsView: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Account Settings" />
       <div className="max-w-5xl mx-auto">
         <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-4">Account Settings</h1>
         <p className="text-gray-400 font-medium mb-12">Manage your profile, security and preferences</p>
@@ -400,18 +389,7 @@ const SettingsView: React.FC = () => {
               </button>
             )}
 
-            {user?.role === 'customer' && (
-              <button onClick={() => setActiveTab(activeTab === 'notifications' ? 'general' : 'notifications')} className={`text-left bg-white rounded-[2rem] border-2 shadow-sm p-6 hover:shadow-xl hover:-translate-y-1 transition-all w-full ${activeTab === 'notifications' ? 'border-gray-900' : 'border-gray-100'}`}>
-                <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center mb-4">
-                  <i className="fas fa-bell text-white"></i>
-                </div>
-                <h3 className="font-black text-gray-900 mb-1">Notifications</h3>
-                <p className="text-xs text-gray-400 font-medium">Manage your preferences</p>
-                <div className="mt-3 flex items-center gap-1 text-xs font-black text-brand-600">
-                  {activeTab === 'notifications' ? 'Close' : 'Manage'} <i className={`fas fa-arrow-${activeTab === 'notifications' ? 'up' : 'right'} text-xs`}></i>
-                </div>
-              </button>
-            )}
+
 
           </div>
 
@@ -541,40 +519,7 @@ const SettingsView: React.FC = () => {
                     </div>
                   )}
 
-                  {activeTab === 'notifications' && user?.role === 'customer' && (
-                    <div>
-                      <div className="flex items-center gap-3 mb-8">
-                        <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center">
-                          <i className="fas fa-bell text-white text-xs"></i>
-                        </div>
-                        <h2 className="text-lg font-black text-gray-900 uppercase tracking-widest">Notification Preferences</h2>
-                      </div>
-                      <div className="space-y-4 max-w-lg mb-8">
-                        {[
-                          { key: 'orderShipped', label: 'Order Updates', desc: 'Get notified when your order is shipped or delivered', icon: 'fa-box' },
-                          { key: 'flashSales', label: 'Flash Sales & Deals', desc: 'Be the first to know about limited-time offers', icon: 'fa-bolt' },
-                          { key: 'newMessages', label: 'New Messages', desc: 'Notifications for customer support messages', icon: 'fa-envelope' },
-                          { key: 'reviewReplies', label: 'Review Replies', desc: 'When a vendor replies to your review', icon: 'fa-reply' },
-                        ].map(item => (
-                          <div key={item.key} className="flex items-center justify-between p-5 bg-gray-50 rounded-2xl">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm">
-                                <i className={`fas ${item.icon} text-brand-600 text-sm`}></i>
-                              </div>
-                              <div>
-                                <p className="font-black text-gray-900 text-sm">{item.label}</p>
-                                <p className="text-xs text-gray-400 font-medium">{item.desc}</p>
-                              </div>
-                            </div>
-                            <button onClick={() => setNotifications((prev: any) => ({ ...prev, [item.key]: !prev[item.key] }))} className={`w-12 h-6 rounded-full transition-all relative shrink-0 ${notifications[item.key] ? 'bg-brand-600' : 'bg-gray-200'}`}>
-                              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${notifications[item.key] ? 'left-6' : 'left-0.5'}`}></span>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                      <button onClick={handleSaveNotifications} className="px-12 py-5 gradient-primary text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-2xl shadow-brand-500/20 hover:scale-[1.02] active:scale-95 transition-all">Save Preferences</button>
-                    </div>
-                  )}
+
 
                   {activeTab === 'social' && user?.role === 'vendor' && (
                     <div>
@@ -621,7 +566,6 @@ const SettingsView: React.FC = () => {
         isOpen={cropModalOpen}
         imageSrc={upImg}
         title="Crop Profile Photo"
-        aspect={1}
         onCancel={() => { setCropModalOpen(false); setUpImg(null); }}
         onCropComplete={(blobUrl) => {
           setAvatar(blobUrl);

@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { useCategories } from '../../hooks/useSecondary';
+import PageTitle from '../../components/PageTitle';
+import { useSharedCategories } from '../../context/DataContext';
 import { Category } from '../../types';
 import { VendorRegistrationData } from '../../types';
 
@@ -15,18 +16,11 @@ const BecomeVendorView: React.FC = () => {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
   const [catError, setCatError] = useState('');
+  const [cat1, setCat1] = useState('');
+  const [cat2, setCat2] = useState('');
   const [showTermsModal, setShowTermsModal] = useState(false);
-  const [selectedVendorCats, setSelectedVendorCats] = useState<string[]>([]);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const { categories: customCategories } = useCategories();
-
-  const toggleVendorCat = (cat: string) => {
-    setSelectedVendorCats(prev => {
-      if (prev.includes(cat)) return prev.filter(c => c !== cat);
-      if (prev.length >= 2) return prev;
-      return [...prev, cat];
-    });
-  };
+  const { categories: customCategories } = useSharedCategories();
 
   // ── OTP Verification State ──
   const [verificationStep, setVerificationStep] = useState(false);
@@ -101,9 +95,14 @@ const BecomeVendorView: React.FC = () => {
     const formData = new FormData(e.currentTarget);
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
-    if (password.length < 6) { setToast('Password must be at least 6 characters.'); return; }
+    if (password.length < 8) { setToast('Password must be at least 8 characters.'); return; }
     if (password !== confirmPassword) { setToast('Passwords do not match!'); return; }
-    if (selectedVendorCats.length === 0) { setCatError('Please select at least 1 category.'); return; }
+    
+    const cat1 = formData.get('storeCategory1') as string || '';
+    const cat2 = formData.get('storeCategory2') as string || '';
+    if (!cat1 && !cat2) { setCatError('Please select at least 1 main category.'); return; }
+    const combinedCategories = [cat1, cat2].filter(Boolean).join(',');
+
     if (!termsChecked) { setToast('Please agree to Merchant Terms first.'); return; }
 
     const san = (s: string) => (s || '').trim().replace(/[<>]/g, '');
@@ -121,7 +120,7 @@ const BecomeVendorView: React.FC = () => {
       role: 'vendor',
       phone: san(formData.get('phone') as string),
       storeName,
-      storeCategory: selectedVendorCats.join(','),
+      storeCategory: combinedCategories,
       storeCity: san(formData.get('storeCity') as string),
       storeDescription: san(formData.get('storeDescription') as string)
     });
@@ -139,21 +138,21 @@ const BecomeVendorView: React.FC = () => {
   // ── OTP Verification Screen ──
   if (verificationStep) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{background:'linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%)'}}>
-        <div className="w-full max-w-md">
-          <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 p-10">
+      <div className="min-h-screen flex items-center justify-center px-4" style={{background:'#f4f6fb'}}>
+        <div className="w-full max-w-[480px]">
+          <div className="bg-white rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-50 p-10 pb-8 relative z-10">
             <div className="text-center mb-8">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{background:'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)'}}>
-                <i className="fas fa-envelope-open-text text-white text-2xl"></i>
+              <div className="w-[4.5rem] h-[4.5rem] rounded-[1.25rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-purple-500/20" style={{background:'linear-gradient(135deg, #a855f7 0%, #ec4899 100%)'}}>
+                <i className="fas fa-envelope-open-text text-white text-3xl"></i>
               </div>
-              <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-2">Verify Your Email</h2>
-              <p className="text-gray-400 text-sm font-medium">
+              <h2 className="text-[26px] font-black text-gray-900 tracking-tight mb-2">Verify Your Email</h2>
+              <p className="text-gray-400 text-[15px] font-medium">
                 We sent an 8-digit code to<br/>
-                <span className="text-gray-700 font-bold">{verificationEmail}</span>
+                <span className="text-gray-800 font-bold">{verificationEmail}</span>
               </p>
             </div>
 
-            <div className="flex items-center justify-center gap-1.5 sm:gap-2.5 mb-6" onPaste={handleOtpPaste}>
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-8" onPaste={handleOtpPaste}>
               {otpDigits.slice(0, 4).map((digit, i) => (
                 <input
                   key={i}
@@ -164,14 +163,12 @@ const BecomeVendorView: React.FC = () => {
                   value={digit}
                   onChange={e => handleOtpChange(i, e.target.value)}
                   onKeyDown={e => handleOtpKeyDown(i, e)}
-                  className={`w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-black rounded-xl border-2 outline-none transition-all ${
-                    digit ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 bg-gray-50 text-gray-900'
-                  } focus:border-purple-500 focus:ring-4 focus:ring-purple-100`}
+                  className={`w-11 h-14 sm:w-12 sm:h-[60px] text-center text-xl font-bold rounded-2xl outline-none transition-all border ${
+                    digit ? 'border-brand-400 text-gray-900 shadow-[0_0_15px_rgba(124,58,237,0.08)]' : 'border-gray-200 text-gray-900'
+                  } focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10`}
                 />
               ))}
-              <div className="w-3 sm:w-4 flex items-center justify-center">
-                <div className="w-2 h-0.5 bg-gray-300 rounded-full"></div>
-              </div>
+              <div className="w-3 flex items-center justify-center text-gray-300 font-black text-xl">-</div>
               {otpDigits.slice(4).map((digit, i) => (
                 <input
                   key={i + 4}
@@ -182,15 +179,15 @@ const BecomeVendorView: React.FC = () => {
                   value={digit}
                   onChange={e => handleOtpChange(i + 4, e.target.value)}
                   onKeyDown={e => handleOtpKeyDown(i + 4, e)}
-                  className={`w-10 h-12 sm:w-12 sm:h-14 text-center text-lg sm:text-xl font-black rounded-xl border-2 outline-none transition-all ${
-                    digit ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 bg-gray-50 text-gray-900'
-                  } focus:border-purple-500 focus:ring-4 focus:ring-purple-100`}
+                  className={`w-11 h-14 sm:w-12 sm:h-[60px] text-center text-xl font-bold rounded-2xl outline-none transition-all border ${
+                    digit ? 'border-brand-400 text-gray-900 shadow-[0_0_15px_rgba(124,58,237,0.08)]' : 'border-gray-200 text-gray-900'
+                  } focus:border-brand-400 focus:ring-4 focus:ring-brand-500/10`}
                 />
               ))}
             </div>
 
             {otpError && (
-              <div className="p-3 bg-red-50 text-red-500 text-sm font-bold rounded-xl mb-4 text-center">
+              <div className="p-3 bg-red-50 text-red-500 text-sm font-bold rounded-xl mb-6 text-center">
                 {otpError}
               </div>
             )}
@@ -198,8 +195,8 @@ const BecomeVendorView: React.FC = () => {
             <button
               onClick={handleVerifyOtp}
               disabled={otpLoading || otpDigits.join('').length !== 8}
-              className="w-full py-4 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-50 mb-4"
-              style={{background:'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)', boxShadow:'0 8px 24px rgba(124,58,237,.25)'}}
+              className="w-full py-4 text-white rounded-2xl font-black text-[13px] uppercase tracking-wider hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 mb-6 shadow-xl shadow-purple-500/20"
+              style={{background:'linear-gradient(to right, #c084fc, #f472b6)'}}
             >
               {otpLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -208,28 +205,28 @@ const BecomeVendorView: React.FC = () => {
               ) : 'Verify & Submit Application'}
             </button>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between px-1">
               <button
                 onClick={() => {
                   setVerificationStep(false);
                   setOtpDigits(['', '', '', '', '', '', '', '']);
                   setOtpError('');
                 }}
-                className="text-xs font-black text-gray-400 hover:text-gray-700 transition-colors"
+                className="text-xs font-black text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1.5"
               >
-                <i className="fas fa-arrow-left mr-1"></i> Back to form
+                <i className="fas fa-arrow-left"></i> Back to form
               </button>
               <button
                 onClick={handleResendCode}
                 disabled={resendCooldown > 0}
-                className={`text-xs font-black transition-colors ${resendCooldown > 0 ? 'text-gray-300' : 'text-purple-600 hover:text-purple-800'}`}
+                className={`text-xs font-black transition-colors ${resendCooldown > 0 ? 'text-gray-300' : 'text-[#a855f7] hover:text-purple-700'}`}
               >
                 {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
               </button>
             </div>
           </div>
 
-          <p className="text-center text-gray-400 text-xs font-medium mt-6">
+          <p className="text-center text-gray-400 text-[13px] font-medium mt-6 relative z-10">
             Didn't receive the email? Check your spam folder.
           </p>
         </div>
@@ -239,6 +236,7 @@ const BecomeVendorView: React.FC = () => {
 
   return (
     <div className="flex flex-col lg:flex-row lg:h-screen lg:overflow-hidden">
+      <PageTitle title="Become a Vendor" />
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex lg:w-[42%] xl:w-[45%] flex-col justify-between p-12 relative overflow-hidden lg:sticky lg:top-0 lg:h-screen" style={{background:'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)'}}>
@@ -335,7 +333,7 @@ const BecomeVendorView: React.FC = () => {
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Business Email</label>
-                <input required name="email" type="email" placeholder="vendor@techworld.com" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold" />
+                <input required name="email" type="email" placeholder="vendor@yourstore.com" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold" />
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Phone Number</label>
@@ -344,11 +342,12 @@ const BecomeVendorView: React.FC = () => {
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Password</label>
                 <div className="relative">
-                  <input required name="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold pr-14" />
+                  <input required name="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" minLength={8} className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold pr-14" />
                   <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-600 transition-colors">
                     <i className={`fas ${showPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                   </button>
                 </div>
+                <p className="text-[10px] text-gray-400 font-medium mt-1.5 ml-2 flex items-center gap-1"><i className="fas fa-info-circle text-gray-300"></i> Must be at least 8 characters long</p>
               </div>
               <div>
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Confirm Password</label>
@@ -361,35 +360,49 @@ const BecomeVendorView: React.FC = () => {
               </div>
               {(() => {
                 const defaultCats = ['Electronics', 'Fashion', 'Home & Living', 'Beauty & Health', 'Sports & Outdoor'];
-                const allCats = [...defaultCats, ...customCategories.map((c: Category) => c.name)];
+                const dbCatNames = customCategories.map((c: Category) => c.name);
+                const allCats = [...new Set([...defaultCats, ...dbCatNames])];
                 return (
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-[0.2em] text-gray-500 mb-3">
-                      Store Categories <span className="text-brand-600">(Choose up to 2)</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      {allCats.map(cat => (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => toggleVendorCat(cat)}
-                          className={`px-4 py-2 rounded-xl text-xs font-black transition-all border-2 ${
-                            selectedVendorCats.includes(cat)
-                              ? 'bg-brand-600 text-white border-brand-600'
-                              : 'bg-gray-50 text-gray-600 border-gray-100 hover:border-brand-300'
-                          } ${selectedVendorCats.length >= 2 && !selectedVendorCats.includes(cat) ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        >
-                          {selectedVendorCats.includes(cat) && <i className="fas fa-check mr-1 text-[10px]"></i>}
-                          {cat}
-                        </button>
-                      ))}
+                    <div className="mb-3 ml-2 mt-2">
+                      <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-1">Store Categories</label>
+                      <p className="text-[10px] text-gray-400 font-medium leading-relaxed">Select your main product category. You may also add a second category if your store spans multiple types (completely optional).</p>
                     </div>
-                    <p className="text-[10px] text-gray-400 font-medium mt-1">
-                      {selectedVendorCats.length === 0 && 'Select at least 1 category'}
-                      {selectedVendorCats.length === 1 && `Selected: ${selectedVendorCats[0]} — you can add 1 more`}
-                      {selectedVendorCats.length === 2 && `Selected: ${selectedVendorCats.join(' & ')}`}
-                    </p>
-                    <input type="hidden" name="storeCategory" value={selectedVendorCats.join(',')} />
+                    <div className="grid grid-cols-2 gap-4 mb-1">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">
+                          Main Category <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          name="storeCategory1"
+                          required
+                          value={cat1}
+                          onChange={(e) => { setCat1(e.target.value); setCatError(''); }}
+                          className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold appearance-none cursor-pointer text-gray-700 text-sm"
+                        >
+                          <option value="" disabled>Select main...</option>
+                          {allCats.filter(cat => cat !== cat2).map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">
+                          2nd Category (Optional)
+                        </label>
+                        <select
+                          name="storeCategory2"
+                          value={cat2}
+                          onChange={(e) => { setCat2(e.target.value); setCatError(''); }}
+                          className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold appearance-none cursor-pointer text-gray-700 text-sm"
+                        >
+                          <option value="">None</option>
+                          {allCats.filter(cat => cat !== cat1).map(cat => (
+                            <option key={`opt-${cat}`} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     {catError && <p className="text-red-500 text-xs font-bold mt-2 ml-2">{catError}</p>}
                   </div>
                 );

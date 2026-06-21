@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
-import { useCategories } from '../../hooks/useSecondary';
+import { useSharedCategories } from '../../context/DataContext';
 import { VendorRegistrationData } from '../../types';
 
 const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMode = false }) => {
@@ -11,7 +12,7 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
   const { setToast } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const { categories: customCategories } = useCategories();
+  const { categories: customCategories } = useSharedCategories();
   const [isVendorMode, setIsVendorMode] = useState(() => initialVendorMode || location.state?.vendorMode || false);
 
   useEffect(() => {
@@ -250,6 +251,7 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
 
   return (
     <div className="flex flex-col lg:flex-row lg:h-screen lg:overflow-hidden">
+      <PageTitle title={initialVendorMode ? "Vendor Login" : "Login"} />
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex lg:w-[42%] xl:w-[45%] flex-col justify-between p-12 relative overflow-hidden lg:sticky lg:top-0 lg:h-screen" style={{background:'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)'}}>
@@ -390,14 +392,7 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
               setPassError('Passwords do not match!');
               return;
             }
-            // Category validation
-            if (isVendorMode) {
-              const catVal = formData.get('storeCategory') as string || '';
-              if (!catVal) {
-                setCategoryError('Please select a store category.');
-                return;
-              }
-            }
+            
             // Phone validation
             const phoneDigits = phoneVal.replace(/[\s\-+]/g, '');
             if (phoneDigits && !/^(880)?01[3-9]\d{8}$/.test(phoneDigits)) {
@@ -406,21 +401,6 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
             }
             
             const data = Object.fromEntries(formData.entries());
-
-            // Store vendor data and initiate OTP phase instead of instant creation
-            if (isVendorMode) {
-              setVerificationEmail(emailVal);
-              setPendingVendorData({
-                storeName: data.storeName as string,
-                storeCategory: data.storeCategory as string,
-                storeCity: data.storeCity as string,
-                phone: data.phone as string,
-                address: data.address as string,
-              });
-              setVerificationStep(true);
-              setResendCooldown(60);
-              return;
-            }
 
             // Normal customer registration
             const res = await register(data as Record<string, string>);
@@ -448,12 +428,6 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
           
           {authMode === 'signup' && (
             <>
-              {isVendorMode && (
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Store Name</label>
-                  <input required name="storeName" type="text" placeholder="e.g. TechWorld Official" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold" />
-                </div>
-              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Full Name</label>
@@ -479,34 +453,7 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
 
           {authMode === 'signup' && (
             <div>
-              {isVendorMode && (
-                <>
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Store City</label>
-                  <input type="text" name="storeCity" placeholder="Your City (e.g. Dhaka, Chittagong, Khulna)" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold mb-4" />
-                  
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">
-                    Store Category <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="storeCategory"
-                    required
-                    onChange={() => setCategoryError('')}
-                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold mb-1 appearance-none cursor-pointer text-gray-700"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>Select your store category</option>
-                    {(() => {
-                      const defaultCats = ['Electronics', 'Fashion', 'Home & Living', 'Beauty & Health', 'Sports & Outdoor'];
-                      const allCats = [...defaultCats, ...customCategories.map((c: any) => c.name)];
-                      return allCats.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ));
-                    })()}
-                  </select>
-                  {categoryError && <p className="text-red-500 text-xs font-bold mt-1 ml-2 mb-2">{categoryError}</p>}
-                </>
-              )}
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">{isVendorMode ? 'Store Address' : 'Delivery Address'}</label>
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Delivery Address</label>
               <textarea required name="address" placeholder="House #, Road #, Area, City" className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-4 focus:ring-brand-500/10 focus:bg-white transition-all font-bold resize-none" rows={2} />
             </div>
           )}
@@ -515,11 +462,12 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 ml-2 mb-2 block">Password</label>
             <div className="relative">
               <i className="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 text-sm pointer-events-none"></i>
-              <input required name="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" className="w-full bg-gray-50 border-2 border-transparent rounded-2xl pl-12 pr-14 py-4 outline-none focus:ring-0 focus:border-brand-400 focus:bg-white transition-all font-bold" />
+              <input required name="password" type={showPass ? 'text' : 'password'} placeholder="••••••••" minLength={8} className="w-full bg-gray-50 border-2 border-transparent rounded-2xl pl-12 pr-14 py-4 outline-none focus:ring-0 focus:border-brand-400 focus:bg-white transition-all font-bold" />
               <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-600 transition-colors">
                 <i className={`fas ${showPass ? 'fa-eye-slash' : 'fa-eye'}`}></i>
               </button>
             </div>
+            {authMode === 'signup' && <p className="text-[10px] text-gray-400 font-medium mt-1.5 ml-2 flex items-center gap-1"><i className="fas fa-info-circle text-gray-300"></i> Must be at least 8 characters long</p>}
           </div>
 
           {authMode === 'signup' && (

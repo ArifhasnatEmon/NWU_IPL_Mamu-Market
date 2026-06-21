@@ -997,6 +997,8 @@ export type Database = {
           user_avatar?: string | null
           user_id?: string | null
           user_name?: string
+          vendor_reply?: string | null
+          vendor_reply_date?: string | null
         }
         Relationships: [
           {

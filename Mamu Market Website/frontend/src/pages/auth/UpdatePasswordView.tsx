@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { supabase } from '../../lib/supabase';
+import PageTitle from '../../components/PageTitle';
 
 const UpdatePasswordView: React.FC = () => {
   const [password, setPassword] = useState('');
@@ -158,6 +159,7 @@ const UpdatePasswordView: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <PageTitle title="Update Password" />
       <Background />
       
       <motion.div

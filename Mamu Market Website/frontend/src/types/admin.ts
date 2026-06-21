@@ -7,6 +7,7 @@ export interface AdminDashboardData {
   pendingUpdates: ProductUpdate[];
   removeRequests: VendorRequest[];
   categoryRequests: VendorRequest[];
+  categorySuggestions: VendorRequest[];
   storeNameRequests: VendorRequest[];
   verificationRequests: VendorRequest[];
   accountDeleteRequests: VendorRequest[];

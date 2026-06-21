@@ -75,7 +75,7 @@ const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
       }
       const blobUrl = URL.createObjectURL(blob);
       onCropComplete(blobUrl);
-    }, 'image/jpeg', 0.95);
+    }, 'image/webp', 0.95);
   };
 
   return (

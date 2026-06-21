@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { useVendorProducts } from '../../hooks/useProducts';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
@@ -32,7 +33,7 @@ const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ field, label, inputRef,
       )}
       {form[field] && (
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-          <p className="text-white text-xs font-black">Change</p>
+          <i className="fas fa-camera text-white text-xl"></i>
         </div>
       )}
     </div>
@@ -64,10 +65,27 @@ const VendorInventoryView: React.FC = () => {
       units: String(p.units || p.stock || 0),
       stockStatus: p.stockStatus || 'in_stock',
       dealType: p.dealType || (p.isSale ? 'flash' : 'none'),
-      mainImage: p.mainImage || '',
-      extraImage1: p.extraImage1 || '',
-      extraImage2: p.extraImage2 || '',
-      extraImage3: p.extraImage3 || '',
+      description: p.description || '',
+      warranty: p.shippingReturnPolicy?.match(/Product Warranty:\s*(.*)/)?.[1] || '',
+      guarantee: p.shippingReturnPolicy?.match(/Product Guarantee:\s*(.*)/)?.[1] || '',
+      returnPolicy: p.shippingReturnPolicy?.match(/Return Policy:\s*(.*)/)?.[1] || '',
+      shippingTime: p.shippingReturnPolicy?.match(/Estimated Delivery:\s*(.*)/)?.[1] || '',
+      mainImage: p.mainImage || p.image || '',
+      extraImage1: p.extraImage1 || p.images?.[0] || '',
+      extraImage2: p.extraImage2 || p.images?.[1] || '',
+      extraImage3: p.extraImage3 || p.images?.[2] || '',
+      color1name: p.colors?.[0]?.name || '',
+      color1hex: p.colors?.[0]?.value || '#000000',
+      color1image: p.colors?.[0]?.image || '',
+      color2name: p.colors?.[1]?.name || '',
+      color2hex: p.colors?.[1]?.value || '#000000',
+      color2image: p.colors?.[1]?.image || '',
+      color3name: p.colors?.[2]?.name || '',
+      color3hex: p.colors?.[2]?.value || '#000000',
+      color3image: p.colors?.[2]?.image || '',
+      color4name: p.colors?.[3]?.name || '',
+      color4hex: p.colors?.[3]?.value || '#000000',
+      color4image: p.colors?.[3]?.image || '',
     });
   };
 
@@ -88,16 +106,44 @@ const VendorInventoryView: React.FC = () => {
   const handleSave = async () => {
     if (!editingProduct) return;
     try {
-      const { error } = await supabase.from('products').update({
-        name: form.name,
+      const colors = [];
+      for (let n = 1; n <= 4; n++) {
+        const name = form[`color${n}name`];
+        const image = form[`color${n}image`];
+        const hex = form[`color${n}hex`] || '#000000';
+        if (name) colors.push({ name, image, hex, value: hex });
+      }
+
+      const changes = {
+        name: form.productName,
         price: Number(form.price),
-        stock_units: Number(form.stock_units),
-      }).eq('id', editingProduct.id);
+        original_price: Number(form.originalPrice),
+        units: Number(form.units),
+        stock: Number(form.units),
+        stock_status: form.stockStatus,
+        deal_type: form.dealType,
+        description: form.description,
+        short_description: form.shortDescription,
+        shipping_return_policy: `Product Warranty: ${form.warranty || 'No Warranty'}\nProduct Guarantee: ${form.guarantee || 'No Guarantee'}\nReturn Policy: ${form.returnPolicy || 'No Returns'}\nEstimated Delivery: ${form.shippingTime || 'Standard Delivery'}`,
+        image: form.mainImage,
+        main_image: form.mainImage,
+        images: [form.extraImage1, form.extraImage2, form.extraImage3].filter(Boolean),
+        extra_image_1: form.extraImage1,
+        extra_image_2: form.extraImage2,
+        extra_image_3: form.extraImage3,
+        colors: colors,
+      };
+
+      const { error } = await supabase.from('product_updates').insert({
+        product_id: editingProduct.id,
+        vendor_id: editingProduct.vendorId,
+        changes: changes,
+        status: 'pending'
+      });
       
       if (error) throw error;
-      setToast('Product updated successfully!');
+      setToast('Update submitted successfully for admin approval!');
       setEditingProduct(null);
-      // We would ideally call a refresh hook here if available, or it will re-fetch on component remount.
     } catch(err: any) {
       console.error(err);
       setToast('Failed to update product: ' + err.message);
@@ -112,9 +158,9 @@ const VendorInventoryView: React.FC = () => {
   };
 
 
-
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Inventory Management" />
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -284,6 +330,79 @@ const VendorInventoryView: React.FC = () => {
                       />
                     </div>
                   </div>
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Short Description</label>
+                    <textarea
+                      value={form.shortDescription}
+                      onChange={e => setForm({ ...form, shortDescription: e.target.value })}
+                      className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-amber-400 resize-none"
+                      rows={2}
+                      placeholder="Brief summary for product card"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Detailed Description</label>
+                    <textarea
+                      value={form.description}
+                      onChange={e => setForm({ ...form, description: e.target.value })}
+                      className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-amber-400 resize-none"
+                      rows={4}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Warranty</label>
+                      <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-gray-100 focus-within:border-brand-400 transition-all">
+                        <span className="inline-flex items-center px-4 bg-gray-50 text-gray-500 text-xs font-black border-r border-gray-100">Warranty:</span>
+                        <input
+                          type="text"
+                          value={form.warranty || ''}
+                          onChange={e => setForm({ ...form, warranty: e.target.value })}
+                          className="w-full bg-white px-4 py-3 font-bold outline-none text-sm"
+                          placeholder="e.g. 1 Year"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Guarantee</label>
+                      <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-gray-100 focus-within:border-brand-400 transition-all">
+                        <span className="inline-flex items-center px-4 bg-gray-50 text-gray-500 text-xs font-black border-r border-gray-100">Guarantee:</span>
+                        <input
+                          type="text"
+                          value={form.guarantee || ''}
+                          onChange={e => setForm({ ...form, guarantee: e.target.value })}
+                          className="w-full bg-white px-4 py-3 font-bold outline-none text-sm"
+                          placeholder="e.g. 100% Authentic"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Return Policy</label>
+                      <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-gray-100 focus-within:border-brand-400 transition-all">
+                        <span className="inline-flex items-center px-4 bg-gray-50 text-gray-500 text-xs font-black border-r border-gray-100">Returns:</span>
+                        <input
+                          type="text"
+                          value={form.returnPolicy || ''}
+                          onChange={e => setForm({ ...form, returnPolicy: e.target.value })}
+                          className="w-full bg-white px-4 py-3 font-bold outline-none text-sm"
+                          placeholder="e.g. 7 Days Free"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 block">Delivery Time</label>
+                      <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-gray-100 focus-within:border-brand-400 transition-all">
+                        <span className="inline-flex items-center px-4 bg-gray-50 text-gray-500 text-xs font-black border-r border-gray-100">Delivery:</span>
+                        <input
+                          type="text"
+                          value={form.shippingTime || ''}
+                          onChange={e => setForm({ ...form, shippingTime: e.target.value })}
+                          className="w-full bg-white px-4 py-3 font-bold outline-none text-sm"
+                          placeholder="e.g. 3-5 Days"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Images */}
                   <div>
@@ -293,6 +412,55 @@ const VendorInventoryView: React.FC = () => {
                       <ImageUploadBox field="extraImage1" label="Extra 1" inputRef={extra1Ref} form={form} handleImageChange={handleImageChange} />
                       <ImageUploadBox field="extraImage2" label="Extra 2" inputRef={extra2Ref} form={form} handleImageChange={handleImageChange} />
                       <ImageUploadBox field="extraImage3" label="Extra 3" inputRef={extra3Ref} form={form} handleImageChange={handleImageChange} />
+                    </div>
+                  </div>
+
+                  {/* Color Variants */}
+                  <div>
+                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3 block">Color Variants <span className="normal-case font-medium opacity-50">(optional)</span></label>
+                    <div className="space-y-3">
+                      {[1, 2, 3, 4].map(n => (
+                        <div key={n} className="grid grid-cols-1 gap-2 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                          <div className="flex gap-3 items-center">
+                            <div className="relative">
+                              <input
+                                type="color"
+                                value={form[`color${n}hex`] || '#000000'}
+                                onChange={e => setForm({ ...form, [`color${n}hex`]: e.target.value })}
+                                className="w-12 h-12 rounded-xl border-2 border-gray-200 cursor-pointer p-0.5 bg-white"
+                                title="Pick color"
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder={`Color ${n} Name (e.g. Sky Blue)`}
+                              value={form[`color${n}name`] || ''}
+                              onChange={e => setForm({ ...form, [`color${n}name`]: e.target.value })}
+                              className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-amber-400 text-sm flex-1"
+                            />
+                            <input
+                              type="text"
+                              value={form[`color${n}hex`] || '#000000'}
+                              onChange={e => setForm({ ...form, [`color${n}hex`]: e.target.value })}
+                              className="w-24 bg-white rounded-2xl px-3 py-3 outline-none font-mono text-sm border-2 border-gray-100 text-center"
+                              placeholder="#000000"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Color image URL or upload →"
+                              value={form[`color${n}image`] || ''}
+                              onChange={e => setForm({ ...form, [`color${n}image`]: e.target.value })}
+                              className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-3 font-bold outline-none focus:border-amber-400 text-sm flex-1"
+                            />
+                            <label className="px-3 bg-white border-2 border-gray-100 rounded-2xl hover:bg-gray-50 transition-all text-gray-600 flex items-center justify-center cursor-pointer">
+                              <i className="fas fa-upload text-sm"></i>
+                              <input type="file" className="hidden" accept="image/*" onChange={e => handleImageChange(`color${n}image`, e.target.files?.[0] || null)} />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>

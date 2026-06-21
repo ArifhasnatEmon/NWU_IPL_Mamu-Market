@@ -7,6 +7,7 @@ export interface TicketReply {
   timestamp?: string;
   from?: string;
   at?: string;
+  attachment?: string;
 }
 
 export interface SupportTicket {
@@ -24,4 +25,5 @@ export interface SupportTicket {
   orderId?: string;
   replies: TicketReply[];
   createdAt: string;
+  attachment?: string;
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import PageTitle from '../../components/PageTitle';
 
 const PaymentFailView: React.FC = () => {
   const navigate = useNavigate();
@@ -8,6 +9,7 @@ const PaymentFailView: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+      <PageTitle title="Payment Status" />
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center">
         <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <i className="fas fa-times text-3xl text-red-500"></i>

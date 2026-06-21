@@ -12,7 +12,6 @@ import { useMessages } from '../hooks/useSupport';
 import { useCategories } from '../hooks/useSecondary';
 import { useApprovedProducts, usePendingProducts } from '../hooks/useProducts';
 import { useVendors } from '../hooks/useVendors';
-import { useNotifications } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
 
 interface LayoutProps {
@@ -33,13 +32,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { wishlist, setSearchQuery, setSelectedCategory, setSelectedSubCategory, setSelectedFilter } = useApp();
   const { products: approvedProducts } = useApprovedProducts();
   const { products: pendingProducts } = usePendingProducts();
-  const { notifications } = useNotifications(user?.id);
   const { vendors: fetchedVendors } = useVendors();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
   const [activeMegaCat, setActiveMegaCat] = useState<string | null>(null);
+  const [showAllMegaCats, setShowAllMegaCats] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   // Hooks must be called before any conditional logic or variables using their results
@@ -49,7 +48,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const [displayCategories, setDisplayCategories] = useState(CATEGORIES);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
-  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [vendorPendingCount, setVendorPendingCount] = useState(0);
 
   // Fetch dynamic categories
@@ -64,9 +62,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const [tickerMessages, setTickerMessages] = useState<string[]>([]);
   useEffect(() => {
@@ -93,8 +88,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   React.useEffect(() => {
     const onStorage = () => setBannerVersion(v => v + 1);
     window.addEventListener('storage', onStorage);
-    window.addEventListener('notifRead', onStorage);
-    return () => { window.removeEventListener('storage', onStorage); window.removeEventListener('notifRead', onStorage); };
+    return () => { window.removeEventListener('storage', onStorage); };
   }, []);
 
   useEffect(() => {
@@ -116,15 +110,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         setVendorPendingCount(0);
       }
     } else {
-      setUnreadNotifCount(0);
       setUnreadMessageCount(0);
       setVendorPendingCount(0);
     }
   }, [user?.id, bannerVersion, pendingProducts, approvedProducts, supportMessages]);
 
-  useEffect(() => {
-    setUnreadNotifCount(notifications.filter(n => !n.read).length);
-  }, [notifications]);
 
   const [topbarTime, setTopbarTime] = useState<{ h: number, m: number, s: number } | null>(null);
   const [topbarSlot, setTopbarSlot] = useState(0);
@@ -162,28 +152,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  const handleSubscribe = async () => {
-    if (!newsletterEmail || !/^\S+@\S+\.\S+$/.test(newsletterEmail)) {
-      setNewsletterStatus('error');
-      // Alert
-      return;
-    }
-
-    setNewsletterStatus('loading');
-    try {
-      const { error } = await supabase.from('newsletter_subscribers').insert({
-        email: newsletterEmail
-      });
-      if (error && error.code !== '23505') throw error; // ignore duplicate email error
-
-      setNewsletterStatus('success');
-      setNewsletterEmail('');
-    } catch (err) {
-      console.error(err);
-      setNewsletterStatus('error');
-    }
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -273,7 +241,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const isAuthPage = ['/user-login', '/user-signup', '/vendor-login', '/affiliate-program'].includes(location.pathname) ||
-    ['/help-center', '/about', '/terms', '/privacy', '/return-policy', '/seller-policy', '/contact', '/reset-password', '/update-password'].includes(location.pathname);
+    ['/help-center', '/about', '/terms', '/privacy', '/return-policy', '/seller-policy', '/contact', '/vendor-support', '/reset-password', '/update-password'].includes(location.pathname);
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-brand-100 selection:text-brand-600 bg-[#F5F5F8]">
@@ -432,17 +400,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   </button>
                 )}
 
-                {user && (user.role === 'vendor' || user.role === 'customer') && (
-                  <button onClick={() => navigate('/notifications')} className="relative hidden lg:flex flex-col items-center gap-1 hover:opacity-80 transition-all">
-                    {unreadNotifCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center z-10">
-                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                      </span>
-                    )}
-                    <i className="fas fa-bell text-xl text-gray-600"></i>
-                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-500">Alerts</span>
-                  </button>
-                )}
+
 
                 {user && user.role !== 'admin' && (
                   <button onClick={() => navigate('/messages')} className="relative hidden lg:flex flex-col items-center gap-1 hover:opacity-80 transition-all">
@@ -477,7 +435,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         )}
                       </div>
                       <div className="hidden xl:flex flex-col text-left">
-                        <span className="text-xs font-black text-gray-900 leading-none mb-1">{user.name}</span>
+                        <span className="text-xs font-black text-gray-900 leading-none mb-1">{user.role === 'vendor' ? (user.storeName || user.name) : user.name}</span>
                         <span className="text-[9px] font-black text-brand-600 uppercase tracking-widest">{user.role}</span>
                       </div>
                       <i className={`fas fa-chevron-down text-[10px] text-gray-400 transition-transform ${isUserMenuOpen ? 'rotate-180' : ''}`}></i>
@@ -614,11 +572,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="container mx-auto px-4">
             <nav className="flex items-center gap-10 py-3 relative">
               {/* All Categories Mega Menu */}
-              <div
-                className="relative"
-                onMouseEnter={() => setIsMegaMenuOpen(true)}
-                onMouseLeave={() => setIsMegaMenuOpen(false)}
-              >
+                <div
+                  className="relative"
+                  onMouseEnter={() => setIsMegaMenuOpen(true)}
+                  onMouseLeave={() => { setIsMegaMenuOpen(false); setShowAllMegaCats(false); }}
+                >
                 <button
                   className={`flex items-center gap-3 px-6 py-2 rounded-xl transition-all font-black uppercase tracking-widest text-[13px] ${isMegaMenuOpen ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'text-gray-900 hover:bg-gray-50'}`}
                 >
@@ -653,23 +611,43 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                             </div>
                             All Products
                           </button>
-                          {displayCategories.map((cat) => (
-                            <button
-                              key={cat.id}
-                              onMouseEnter={() => setActiveMegaCat(cat.id)}
-                              onClick={() => {
-                                setSelectedCategory(cat.id);
-                                navigate(`/${cat.id}`);
-                                setIsMegaMenuOpen(false);
-                              }}
-                              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all group text-left ${activeMegaCat === cat.id ? 'text-brand-600 bg-white shadow-md' : 'text-gray-600 hover:bg-white hover:text-brand-600'}`}
-                            >
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeMegaCat === cat.id ? 'gradient-primary text-white' : 'bg-white shadow-sm group-hover:gradient-primary group-hover:text-white'}`}>
-                                <i className={`fas ${cat.icon}`}></i>
-                              </div>
-                              {cat.name}
-                            </button>
-                          ))}
+                          {(() => {
+                            const filtered = displayCategories.filter(c => c.name.toLowerCase() !== 'general');
+                            const visible = showAllMegaCats ? filtered : filtered.slice(0, 5);
+                            return (
+                              <>
+                                {visible.map((cat) => (
+                                  <button
+                                    key={cat.id}
+                                    onMouseEnter={() => setActiveMegaCat(cat.id)}
+                                    onClick={() => {
+                                      setSelectedCategory(cat.id);
+                                      navigate(`/${cat.id}`);
+                                      setIsMegaMenuOpen(false);
+                                    }}
+                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all group text-left ${activeMegaCat === cat.id ? 'text-brand-600 bg-white shadow-md' : 'text-gray-600 hover:bg-white hover:text-brand-600'}`}
+                                  >
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${activeMegaCat === cat.id ? 'gradient-primary text-white' : 'bg-white shadow-sm group-hover:gradient-primary group-hover:text-white'}`}>
+                                      <i className={`fas ${cat.icon}`}></i>
+                                    </div>
+                                    {cat.name}
+                                  </button>
+                                ))}
+                                {!showAllMegaCats && filtered.length > 5 && (
+                                  <button
+                                    onMouseEnter={() => setActiveMegaCat(null)}
+                                    onClick={() => setShowAllMegaCats(true)}
+                                    className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all group text-left text-gray-500 hover:bg-gray-100 hover:text-gray-900 mt-2 border border-dashed border-gray-200"
+                                  >
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-100 text-gray-400 group-hover:bg-white group-hover:text-gray-900 shadow-sm transition-colors">
+                                      <i className="fas fa-ellipsis-h"></i>
+                                    </div>
+                                    Browse all categories
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -811,14 +789,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
               </div>
 
-              <div className={user?.role === 'vendor' ? 'flex-1' : 'lg:col-span-2'}>
+              <div className={user?.role === 'vendor' ? 'flex-1' : 'lg:col-span-3'}>
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Quick Links</h3>
                 <ul className="space-y-3 text-gray-400 font-bold text-sm">
                   <li><button onClick={() => handleNav('/about')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> About Us</button></li>
-                  <li><button onClick={() => navigate('/contact')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Contact Us</button></li>
+                  <li><button onClick={() => navigate(user?.role === 'vendor' ? '/vendor-support' : '/contact')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> {user?.role === 'vendor' ? 'Vendor Support' : 'User Support'}</button></li>
                   <li><button onClick={() => handleNav('/help-center')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Help & Support</button></li>
-                  <li><button onClick={() => navigate('/terms')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Terms & Conditions</button></li>
-                  <li><button onClick={() => handleNav('/return-policy')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Return & Refund Policy</button></li>
+                  {user?.role !== 'vendor' && (
+                    <>
+                      <li><button onClick={() => navigate('/terms')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Terms & Conditions</button></li>
+                      <li><button onClick={() => handleNav('/return-policy')} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Return & Refund Policy</button></li>
+                    </>
+                  )}
                 </ul>
               </div>
 
@@ -835,7 +817,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
               {/* ACCOUNT — hidden for vendor */}
               {user?.role !== 'vendor' && (
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-3">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Account</h3>
                   <ul className="space-y-3 text-gray-400 font-bold text-sm">
                     <li><button onClick={() => handleNav('/settings', true)} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> My Account</button></li>
@@ -848,7 +830,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
               {/* MERCHANT — hidden for vendor */}
               {user?.role !== 'vendor' && (
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-3">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Merchant</h3>
                   <ul className="space-y-3 text-gray-400 font-bold text-sm">
                     <li><button onClick={() => { navigate('/affiliate-program'); }} className="hover:text-white transition-colors flex items-center gap-2 group"><i className="fas fa-chevron-right text-[6px] opacity-0 group-hover:opacity-100 -ml-3 group-hover:ml-0 transition-all"></i> Affiliate Program</button></li>
@@ -860,52 +842,35 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
               )}
 
-              {/* 4TH COLUMN — Merchant Tools for vendor, Newsletter for others */}
-              <div className={user?.role === 'vendor' ? 'flex-1' : 'lg:col-span-3'}>
-                {user?.role === 'vendor' ? (
-                  <>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Merchant Tools</h3>
-                    <div className="space-y-3">
-                      {[
-                        { label: 'My Dashboard', path: '/dashboard', icon: 'fa-store' },
-                        { label: 'My Store', path: `/vendors/${user.id}`, icon: 'fa-shop' },
-                        { label: 'Analytics', path: '/dashboard/analytics', icon: 'fa-chart-pie' },
-                        { label: 'Seller Policies', path: '/seller-policy', icon: 'fa-file-contract' },
-                      ].map(item => (
-                        <button key={item.label} onClick={() => { navigate(item.path); }} className="w-full text-left flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm font-medium">
-                          <i className={`fas ${item.icon} text-brand-400 w-4`}></i> {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Newsletter</h3>
-                    <p className="text-gray-400 mb-5 text-sm font-medium leading-relaxed">Subscribe for the latest deals and exclusive offers.</p>
-                    <input
-                      type="email"
-                      placeholder="Enter your email"
-                      value={newsletterEmail}
-                      onChange={e => { setNewsletterEmail(e.target.value); setNewsletterStatus('idle'); }}
-                      className={`w-full bg-gray-800 border-2 rounded-xl px-5 py-3.5 text-sm focus:ring-0 outline-none transition-all mb-3 ${newsletterStatus === 'error' ? 'border-red-500' : 'border-transparent focus:border-brand-600'}`}
-                    />
-                    <button
-                      onClick={handleSubscribe}
-                      disabled={newsletterStatus === 'loading' || newsletterStatus === 'success'}
-                      className="w-full gradient-primary py-3.5 rounded-xl font-black text-[11px] uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-brand-500/10 disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      {newsletterStatus === 'loading' ? 'Subscribing...' : newsletterStatus === 'success' ? 'Subscribed!' : 'Subscribe Now'}
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* 4TH COLUMN — Merchant Tools for vendor */}
+              {user?.role === 'vendor' && (
+                <div className="flex-1">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-6 text-brand-300">Merchant Tools</h3>
+                  <div className="space-y-3">
+                    {[
+                      { label: 'My Dashboard', path: '/dashboard', icon: 'fa-store' },
+                      { label: 'My Store', path: `/vendors/${user.id}`, icon: 'fa-shop' },
+                      { label: 'Analytics', path: '/dashboard/analytics', icon: 'fa-chart-pie' },
+                      { label: 'Seller Policies', path: '/seller-policy', icon: 'fa-file-contract' },
+                    ].map(item => (
+                      <button key={item.label} onClick={() => { navigate(item.path); }} className="w-full text-left flex items-center gap-3 text-gray-400 hover:text-white transition-colors text-sm font-medium">
+                        <i className={`fas ${item.icon} text-brand-400 w-4`}></i> {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-gray-800 pt-10 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
               <p>© {new Date().getFullYear()} MAMU MARKET INC</p>
               <div className="flex gap-8">
-                <button onClick={() => handleNav('/privacy')} className="hover:text-white transition-colors">Privacy</button>
-                <button onClick={() => handleNav('/terms')} className="hover:text-white transition-colors">Terms</button>
+                {user?.role !== 'vendor' && (
+                  <>
+                    <button onClick={() => handleNav('/privacy')} className="hover:text-white transition-colors">Privacy</button>
+                    <button onClick={() => handleNav('/terms')} className="hover:text-white transition-colors">Terms</button>
+                  </>
+                )}
                 <button className="hover:text-white transition-colors">Cookies</button>
               </div>
             </div>

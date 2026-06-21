@@ -12,6 +12,14 @@ import Layout from '../components/Layout';
 import CartDrawer from '../components/cart/CartDrawer';
 import Toast from '../components/ui/Toast';
 
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+};
+
 // Error Boundary
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
   constructor(props: { children: React.ReactNode }) { super(props); this.state = { hasError: false, error: null }; }
@@ -55,7 +63,9 @@ import VendorInventoryView from '../pages/vendor/VendorInventoryView';
 import VendorAnalyticsView from '../pages/vendor/VendorAnalyticsView';
 import AddProductView from '../pages/vendor/AddProductView';
 import VendorOrdersView from '../pages/vendor/VendorOrdersView';
+import VendorPromoCodesView from '../pages/vendor/VendorPromoCodesView';
 import StoreSettingsView from '../pages/vendor/StoreSettingsView';
+
 import BecomeVendorView from '../pages/static/BecomeVendorView';
 import OrderHistoryView from '../pages/account/OrderHistoryView';
 import WishlistView from '../pages/account/WishlistView';
@@ -64,6 +74,7 @@ import TopVendorsView from '../pages/vendor/TopVendorsView';
 import StaticPageView from '../pages/static/StaticPageView';
 import TermsPrivacyView from '../pages/static/TermsPrivacyView';
 import ContactView from '../pages/static/ContactView';
+import VendorSupportView from '../pages/static/VendorSupportView';
 import CartView from '../pages/cart/CartView';
 import CheckoutSuccessView from '../pages/cart/CheckoutSuccessView';
 import CheckoutView from '../pages/cart/CheckoutView';
@@ -75,7 +86,6 @@ import AdminLoginView from '../pages/auth/AdminLoginView';
 import ResetPasswordView from '../pages/auth/ResetPasswordView';
 import UpdatePasswordView from '../pages/auth/UpdatePasswordView';
 import AdminDashboardView from '../pages/admin/AdminDashboardView';
-import NotificationsView from '../pages/account/NotificationsView';
 
 // Protected route components
 const FullScreenLoader = () => (
@@ -151,6 +161,7 @@ const AppRoutes: React.FC = () => {
     <>
       <ErrorBoundary>
         <Layout>
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<HomeView />} />
             <Route path="/products" element={<ProductsView />} />
@@ -180,7 +191,7 @@ const AppRoutes: React.FC = () => {
             <Route path="/cart" element={<CartView />} />
             <Route path="/wishlist" element={<WishlistView />} />
             <Route path="/messages" element={<ProtectedRoute><MessagesView /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><NotificationsView /></ProtectedRoute>} />
+
             <Route path="/checkout" element={<Navigate to="/checkout/delivery" replace />} />
             <Route path="/checkout/delivery" element={<CheckoutView />} />
             <Route path="/checkout/payment" element={<CheckoutView />} />
@@ -195,11 +206,13 @@ const AppRoutes: React.FC = () => {
             <Route path="/dashboard/analytics" element={<ProtectedVendorRoute><VendorAnalyticsView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/add-product" element={<ProtectedVendorRoute><AddProductView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/orders" element={<ProtectedVendorRoute><VendorOrdersView /></ProtectedVendorRoute>} />
+            <Route path="/dashboard/promo" element={<ProtectedVendorRoute><VendorPromoCodesView /></ProtectedVendorRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsView /></ProtectedRoute>} />
             <Route path="/settings/store" element={<ProtectedVendorRoute><StoreSettingsView /></ProtectedVendorRoute>} />
             <Route path="/orders" element={<ProtectedRoute><OrderHistoryView /></ProtectedRoute>} />
             <Route path="/help-center" element={<StaticPageView type="help-center" />} />
             <Route path="/contact" element={<ContactView />} />
+            <Route path="/vendor-support" element={<VendorSupportView />} />
             <Route path="/about" element={<StaticPageView type="about-us" />} />
             <Route path="/terms" element={<TermsPrivacyView />} />
             <Route path="/privacy" element={<TermsPrivacyView />} />

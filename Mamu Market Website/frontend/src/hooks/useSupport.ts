@@ -7,6 +7,7 @@ import { useRealtimeSubscription } from './useRealtimeSubscription';
 
 export const useSupportTickets = () => {
   const { user } = useAuth();
+  const [instanceId] = useState(() => Math.random().toString(36).substring(7));
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -63,7 +64,7 @@ export const useSupportTickets = () => {
     events: ['INSERT', 'UPDATE'],
     filter: rtTicketFilter,
     enabled: !!user,
-    channelName: `rt-support-tickets-${user?.id}-${user?.role}`,
+    channelName: `rt-support-tickets-${user?.id}-${user?.role}-${instanceId}`,
     onEvent: handleTicketEvent,
   });
 
@@ -81,14 +82,31 @@ export const useSupportTickets = () => {
           category: data.category || 'other',
           priority: data.priority || 'normal',
           status: 'open',
-          description: data.description || '',
-          message: data.message || data.description || '',
-          order_id: data.orderId || null,
+          description: data.message || data.description || '',
+          order_id: (data as any).referenceId || data.orderId || null,
           replies: [],
-        });
+          attachment: data.attachment || null,
+        })
+        .select('id')
+        .single();
 
       if (dbErr) throw dbErr;
       await fetchTickets();
+
+      // Automated reply after 30 seconds
+      if (data?.id) {
+        setTimeout(async () => {
+          try {
+            const autoReplyText = "Thank you for contacting Mamu Market Support! We have received your request and our team is currently reviewing it. We typically reply within 12-24 hours. If you have any additional details or screenshots, please feel free to add them here.";
+            await replyToTicket(data.id, autoReplyText, 'admin');
+            
+
+          } catch(e) {
+            console.error('Failed to send automated reply:', e);
+          }
+        }, 30000);
+      }
+
       return true;
     } catch (err) {
       console.error('createTicket error:', err);
@@ -112,19 +130,22 @@ export const useSupportTickets = () => {
     }
   };
 
-  const replyToTicket = async (ticketId: string, text: string, from: 'user' | 'admin') => {
+  const replyToTicket = async (ticketId: string, text: string, from: 'user' | 'admin', attachment?: string) => {
     try {
 
       const { data: ticket, error: fetchErr } = await supabase
         .from('support_tickets')
-        .select('replies, status')
+        .select('replies, status, user_email, user_name, user_id, created_at, subject, user_role')
         .eq('id', ticketId)
         .single();
 
       if (fetchErr) throw fetchErr;
 
       const currentReplies = ticket?.replies || [];
-      const newReply = { from, text, at: new Date().toISOString() };
+      const newReply: any = { from, text, at: new Date().toISOString() };
+      if (attachment) {
+        newReply.attachment = attachment;
+      }
 
       const updates: Record<string, any> = {
         replies: [...currentReplies, newReply],
@@ -141,6 +162,34 @@ export const useSupportTickets = () => {
         .eq('id', ticketId);
 
       if (dbErr) throw dbErr;
+
+      // Send email notification if admin replied
+      if (from === 'admin' && ticket?.user_email) {
+        import('../utils/emailTemplates').then(({ emailTemplates }) => {
+          emailTemplates.ticketReplyAdmin(ticket.user_email, ticket.user_name || 'Customer', ticketId, text).catch(e => console.error('Email error:', e));
+        });
+      }
+
+      // Automated reply logic (24-hour reset)
+      if (from === 'user' && ticket) {
+        const lastAdminReply = currentReplies.slice().reverse().find((r: any) => r.from === 'admin');
+        const lastReplyTime = lastAdminReply ? new Date(lastAdminReply.at).getTime() : new Date(ticket.created_at || Date.now()).getTime();
+        const hoursSinceLastReply = (Date.now() - lastReplyTime) / (1000 * 60 * 60);
+
+        if (hoursSinceLastReply >= 24) {
+          setTimeout(async () => {
+            try {
+              const autoReplyText = "Thank you for contacting Mamu Market Support! We have received your request and our team is currently reviewing it. We typically reply within 12-24 hours. If you have any additional details or screenshots, please feel free to add them here.";
+              await replyToTicket(ticketId, autoReplyText, 'admin');
+              
+
+            } catch(e) {
+              console.error('Failed to send 24h automated reply:', e);
+            }
+          }, 30000);
+        }
+      }
+
       await fetchTickets();
       return true;
     } catch (err) {
@@ -154,6 +203,7 @@ export const useSupportTickets = () => {
 
 export const useMessages = () => {
   const { user } = useAuth();
+  const [instanceId] = useState(() => Math.random().toString(36).substring(7));
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -169,7 +219,8 @@ export const useMessages = () => {
     receiverAvatar: m.receiver_avatar,
     text: m.text,
     read: m.read,
-    date: m.date || m.created_at
+    date: m.date || m.created_at,
+    attachment: m.attachment
   });
 
   const fetchMessages = async () => {
@@ -204,6 +255,9 @@ export const useMessages = () => {
 
   useEffect(() => {
     fetchMessages();
+    const handleEvent = () => fetchMessages();
+    window.addEventListener('notifRead', handleEvent);
+    return () => window.removeEventListener('notifRead', handleEvent);
   }, [user?.id]);
 
   // Realtime
@@ -237,7 +291,7 @@ export const useMessages = () => {
     events: ['INSERT', 'UPDATE'],
 
     enabled: !!user?.id,
-    channelName: `rt-messages-${user?.id}`,
+    channelName: `rt-messages-${user?.id}-${instanceId}`,
     onEvent: handleMessageEvent,
   });
 
@@ -252,10 +306,11 @@ export const useMessages = () => {
         receiver_name: data.receiverName,
         receiver_avatar: data.receiverAvatar,
         text: data.text,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        attachment: data.attachment || null
       });
       if (error) throw error;
-
+      window.dispatchEvent(new Event('notifRead'));
       return true;
     } catch (err) {
       console.error('sendMessage error:', err);
@@ -270,6 +325,13 @@ export const useMessages = () => {
         .eq('receiver_id', user.id)
         .eq('sender_id', otherId);
       if (error) throw error;
+      
+      setMessages(prev => prev.map(m => 
+        (m.receiverId === user.id && m.senderId === otherId) 
+          ? { ...m, read: true } 
+          : m
+      ));
+      window.dispatchEvent(new Event('notifRead'));
 
     } catch (err) {
       console.error('markAsRead error:', err);

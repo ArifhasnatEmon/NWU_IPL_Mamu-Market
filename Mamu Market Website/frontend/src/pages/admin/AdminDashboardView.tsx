@@ -5,17 +5,19 @@ import { User, AdminDashboardData } from '../../types';
 import { mapProduct, mapReportedReview, mapReportedProduct } from '../../lib/dbMappers';
 import OrderManagementPanel from '../../components/admin/OrderManagementPanel';
 import SupportTicketsPanel from '../../components/admin/SupportTicketsPanel';
+import PageTitle from '../../components/PageTitle';
 import ApprovalsPanel from '../../components/admin/ApprovalsPanel';
 import MarketingPanel from '../../components/admin/MarketingPanel';
 import CategoryManagementTab from '../../components/admin/marketing/CategoryManagementTab';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { pushNotif } from '../../utils/notifications';
+
 import { emailTemplates } from '../../utils/emailTemplates';
 import { useOrders } from '../../hooks/useOrders';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 
 import { useSupportTickets } from '../../hooks/useSupport';
+import { usePromoCodes } from '../../hooks/useMarketing';
 import { supabase } from '../../lib/supabase';
 
 const AdminDashboardView: React.FC = () => {
@@ -25,8 +27,9 @@ const AdminDashboardView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Overview');
   const { orders: allOrders } = useOrders(user);
   const { requests, updateRequestStatus, refresh: refreshRequests } = useVendorRequests();
+  const { promoCodes, refreshPromoCodes } = usePromoCodes();
 
-  const { tickets: allTickets } = useSupportTickets();
+  const { tickets: allTickets, fetchTickets: refreshAllTickets } = useSupportTickets();
 
   const [suspendModal, setSuspendModal] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<User | null>(null);
@@ -44,6 +47,7 @@ const AdminDashboardView: React.FC = () => {
     pendingUpdates: [],
     removeRequests: [],
     categoryRequests: [],
+    categorySuggestions: [],
     storeNameRequests: [],
     verificationRequests: [],
     accountDeleteRequests: [],
@@ -54,6 +58,12 @@ const AdminDashboardView: React.FC = () => {
   });
 
   const refreshData = async () => {
+    // Refresh vendor requests first so we have fresh data
+    await refreshRequests();
+  };
+
+  // Build admin data whenever requests or other dependencies update
+  const rebuildData = async () => {
     let uniqueUsers: any[] = [];
     try {
       const { data: profs, error } = await supabase.from('profiles').select('*');
@@ -126,31 +136,34 @@ const AdminDashboardView: React.FC = () => {
       console.error('Error fetching database data:', e);
     }
 
+    // Only show pending requests in each category
+    const pendingRequests = requests.filter(r => r.status === 'pending');
+
     setData({
       users: uniqueUsers as User[],
       pendingProducts,
       pendingUpdates,
-      removeRequests: requests.filter(r => r.request_type === 'product_remove'),
-      categoryRequests: requests.filter(r => r.request_type === 'category_add'),
-      storeNameRequests: requests.filter(r => r.request_type === 'store_name'),
-      verificationRequests: requests.filter(r => r.request_type === 'verification'),
-      accountDeleteRequests: requests.filter(r => r.request_type === 'account_delete'),
+      removeRequests: pendingRequests.filter(r => r.request_type === 'product_remove'),
+      categoryRequests: pendingRequests.filter(r => r.request_type === 'category_add'),
+      categorySuggestions: pendingRequests.filter(r => r.request_type === 'category_suggest'),
+      storeNameRequests: pendingRequests.filter(r => r.request_type === 'store_name'),
+      verificationRequests: pendingRequests.filter(r => r.request_type === 'verification'),
+      accountDeleteRequests: pendingRequests.filter(r => r.request_type === 'account_delete'),
       approvedProducts: approvedProducts,
       reportedReviews: typeof repReviews !== 'undefined' ? repReviews : [],
       reportedProducts: typeof reportedProds !== 'undefined' ? reportedProds : [],
       vendorRequests: uniqueUsers.filter((u: any) => u.role === 'vendor' && u.status === 'pending'),
     });
-    refreshRequests();
   };
 
   useEffect(() => {
-    refreshData();
+    rebuildData();
   }, []);
 
-  // Auto refresh
+  // Re-sync data whenever requests change (realtime or after approve/reject)
   useEffect(() => {
-    // Future enhancement: Add realtime listener for user updates
-  }, []);
+    rebuildData();
+  }, [requests]);
 
   useEffect(() => {
     if (toast) {
@@ -192,7 +205,7 @@ const AdminDashboardView: React.FC = () => {
       if (error) throw error;
 
       if (status === 'approved') {
-        pushNotif(userId, 'Account Approved', 'Congratulations! Your vendor account has been approved. You can now start adding products.');
+
       }
       setToast(`Vendor ${status}`);
       refreshData();
@@ -203,6 +216,7 @@ const AdminDashboardView: React.FC = () => {
 
   const handleProductApproval = async (productId: string, approve: boolean, reason?: string) => {
     try {
+      setToast(approve ? 'Approving product, please wait...' : 'Rejecting product, please wait...');
       const newStatus = approve ? 'approved' : 'rejected';
       const { error } = await supabase.from('products').update({ status: newStatus }).eq('id', productId);
       if (error) throw error;
@@ -215,17 +229,45 @@ const AdminDashboardView: React.FC = () => {
         const vendorName = vProfile?.name || 'Vendor';
 
         if (approve) {
-          pushNotif(product.vendorId, 'Product Approved', `Your product "${product.productName}" has been approved and is now live on the market!`);
           if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName, 'Approved').catch(console.error);
         } else {
-          pushNotif(product.vendorId, 'Product Rejected', `Your product "${product.productName}" was not approved. Reason: ${reason || 'Does not meet our quality guidelines.'}`);
           if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName, 'Rejected', reason).catch(console.error);
         }
       }
       refreshData();
+      setToast(approve ? 'Product approved successfully!' : 'Product rejected successfully.');
     } catch (e) {
       console.error('Product approval error:', e);
       setToast('Error approving product.');
+    }
+  };
+
+  const handlePromoCodeAction = async (promoId: string, approve: boolean) => {
+    try {
+      setToast(approve ? 'Approving promo code...' : 'Rejecting promo code...');
+      const newStatus = approve ? 'approved' : 'rejected';
+      const isActive = approve ? true : false;
+      
+      const { error } = await supabase.from('promo_codes').update({ 
+        status: newStatus,
+        active: isActive 
+      }).eq('id', promoId);
+      
+      if (error) throw error;
+      
+      // Find promo code to notify vendor
+      const promo = promoCodes.find((p: any) => p.id === promoId);
+      if (promo && promo.vendor_id) {
+        if (approve) {
+
+        }
+      }
+      
+      setToast(`Promo code ${newStatus}`);
+      refreshPromoCodes();
+    } catch (e: any) {
+      console.error('Promo approval error:', e);
+      setToast('Error updating promo code status.');
     }
   };
 
@@ -238,10 +280,8 @@ const AdminDashboardView: React.FC = () => {
         if (updateError) throw updateError;
 
         await supabase.from('product_updates').update({ status: 'approved' }).eq('id', updateId);
-        pushNotif(update.vendorId, 'Update Approved', `Your product update has been approved.`);
       } else if (update) {
         await supabase.from('product_updates').update({ status: 'rejected' }).eq('id', updateId);
-        pushNotif(update.vendorId, 'Update Rejected', `Your product update was rejected.`);
       }
       refreshData();
     } catch (e) {
@@ -254,12 +294,23 @@ const AdminDashboardView: React.FC = () => {
     const request = requests.find((r: any) => r.id === requestId);
     if (approve && request) {
       try {
-        pushNotif(request.vendor_id, 'Product Removal Approved', `Your request to remove a product has been approved.`);
+        // Actually delete the product from the database
+        const productId = request.current_value;
+        if (productId) {
+          const { error: deleteErr } = await supabase.from('products').delete().eq('id', productId);
+          if (deleteErr) {
+            console.error('Error deleting product:', deleteErr);
+            setToast('Error deleting product: ' + deleteErr.message);
+            return;
+          }
+        }
       } catch (e) {
         console.error("Error deleting product", e);
+        setToast('Error processing removal request.');
+        return;
       }
     } else if (request) {
-      pushNotif(request.vendor_id, 'Product Removal Rejected', `Your request to remove a product was rejected.`);
+
     }
 
     if (request && request.vendor_id) {
@@ -270,6 +321,7 @@ const AdminDashboardView: React.FC = () => {
     }
 
     await updateRequestStatus(requestId, approve ? 'approved' : 'rejected');
+    setToast(approve ? 'Product removed successfully' : 'Removal request rejected');
     refreshData();
   };
 
@@ -292,14 +344,40 @@ const AdminDashboardView: React.FC = () => {
 
   const handleCategoryRequest = async (reqId: string, approve: boolean) => {
     const request = requests.find((r: any) => r.id === reqId);
-    if (approve && request && request.requested_value) {
-      const { error: catErr } = await supabase.from('categories').insert({ name: request.requested_value, icon: 'fa-tag' });
-      if (catErr) console.error('Error creating category:', catErr);
+    if (approve && request && request.requested_value && request.vendor_id) {
+      // Add the category to the vendor's store_category field
+      const { data: vendorProfile } = await supabase.from('profiles').select('store_category').eq('id', request.vendor_id).single();
+      const currentCats = (vendorProfile?.store_category || '').split(',').map((c: string) => c.trim()).filter(Boolean);
+      if (!currentCats.includes(request.requested_value)) {
+        const updatedCats = [...currentCats, request.requested_value].join(', ');
+        const { error: updateErr } = await supabase.from('profiles').update({ store_category: updatedCats }).eq('id', request.vendor_id);
+        if (updateErr) console.error('Error updating vendor categories:', updateErr);
+      }
+    } else if (request) {
     }
     if (request && request.vendor_id) {
       const { data: vProfile } = await supabase.from('profiles').select('email, name').eq('id', request.vendor_id).single();
       if (vProfile?.email) {
-        emailTemplates.vendorRequestStatus(vProfile.email, vProfile.name || 'Vendor', 'Category Creation', approve ? 'Approved' : 'Rejected').catch(console.error);
+        emailTemplates.vendorRequestStatus(vProfile.email, vProfile.name || 'Vendor', 'Category Addition', approve ? 'Approved' : 'Rejected').catch(console.error);
+      }
+    }
+    await updateRequestStatus(reqId, approve ? 'approved' : 'rejected');
+    refreshData();
+  };
+
+  const handleCategorySuggestion = async (reqId: string, approve: boolean) => {
+    const request = requests.find((r: any) => r.id === reqId);
+    if (approve && request && request.requested_value) {
+      // Just acknowledge — don't add to the vendor's profile
+      // Insert into categories table so it appears in Category Management
+      const { error: catErr } = await supabase.from('categories').insert({ name: request.requested_value, icon: 'fa-tag' });
+      if (catErr && catErr.code !== '23505') console.error('Error creating category:', catErr); // ignore duplicate
+    } else if (request) {
+    }
+    if (request && request.vendor_id) {
+      const { data: vProfile } = await supabase.from('profiles').select('email, name').eq('id', request.vendor_id).single();
+      if (vProfile?.email) {
+        emailTemplates.vendorRequestStatus(vProfile.email, vProfile.name || 'Vendor', 'Category Suggestion', approve ? 'Acknowledged' : 'Rejected').catch(console.error);
       }
     }
     await updateRequestStatus(reqId, approve ? 'approved' : 'rejected');
@@ -312,9 +390,7 @@ const AdminDashboardView: React.FC = () => {
     if (approve && request) {
       const { error: updateErr } = await supabase.from('profiles').update({ store_name: request.requested_value }).eq('id', request.vendor_id);
       if (updateErr) console.error('Error updating store name:', updateErr);
-      pushNotif(request.vendor_id, 'Store Name Change Approved', `Your store name has been changed to "${request.requested_value}".`);
     } else if (request) {
-      pushNotif(request.vendor_id, 'Store Name Change Rejected', `Your request to change store name was rejected.`);
     }
 
     if (request && request.vendor_id) {
@@ -334,9 +410,7 @@ const AdminDashboardView: React.FC = () => {
     if (approve && request) {
       const { error: verifyErr } = await supabase.from('profiles').update({ verified: true }).eq('id', request.vendor_id);
       if (verifyErr) console.error('Error verifying vendor:', verifyErr);
-      pushNotif(request.vendor_id, 'Store Verified', 'Congratulations! Your store has been verified. You now have a verified badge on your profile.');
     } else if (request) {
-      pushNotif(request.vendor_id, 'Verification Rejected', 'Your store verification request was rejected. Please ensure your documents are clear and valid.');
     }
 
     if (request && request.vendor_id) {
@@ -374,14 +448,38 @@ const AdminDashboardView: React.FC = () => {
       setToast('Error revoking verification');
     }
   };
-  const tabs = ["Overview", "Vendor Approvals", "Product Approvals", "Verification Requests", "Remove Requests", "Store Requests", "Account Requests", "User Management", "Vendor Management", "Reviews & Reports", "Product Monitor", "Flash Deals", "Category Management", "Promo Codes", "Order Management", "Support Tickets"];
+  const tabs = ["Overview", "Vendor Approvals", "Product Approvals", "Verification Requests", "Remove Requests", "Store Requests", "Account Requests", "User Management", "Vendor Management", "Reviews & Reports", "Product Monitor", "Flash Deals", "Category Management", "Promo Codes", "Order Management", "Customer Tickets", "Vendor Tickets", "Monitored Chats"];
+
+  let pendingCounts: Record<string, number> = {};
+  try {
+    pendingCounts = {
+      'Vendor Approvals': data.vendorRequests?.filter(r => r.status === 'pending').length || 0,
+      'Product Approvals': [
+        ...data.pendingProducts.filter((p: any) => p.status !== 'rejected'),
+        ...data.pendingUpdates
+      ].length,
+      'Verification Requests': requests.filter(r => r.request_type === 'verification' && r.status === 'pending').length,
+      'Remove Requests': requests.filter(r => r.request_type === 'product_remove' && r.status === 'pending').length,
+      'Store Requests': requests.filter(r => ['store_name', 'category_remove', 'city_change', 'email_change'].includes(r.request_type) && r.status === 'pending').length
+        + requests.filter(r => ['category_add', 'category_suggest'].includes(r.request_type) && r.status === 'pending').length,
+      'Account Requests': requests.filter(r => r.request_type === 'account_delete' && r.status === 'pending').length,
+      'Customer Tickets': allTickets.filter((r: any) => r.status === 'open' && r.userRole !== 'vendor').length,
+      'Vendor Tickets': allTickets.filter((r: any) => r.status === 'open' && r.userRole === 'vendor').length,
+      'Monitored Chats': allTickets.filter((r: any) => r.status === 'open' && r.category === 'vendor_inquiry').length,
+      'Order Management': allOrders.filter(
+        (o: any) => o.cancelRequest === 'pending' || o.cancelRequest === 'vendor_approved' || o.cancelRequest === 'vendor_rejected'
+      ).length,
+      'Promo Codes': promoCodes.filter((c: any) => c.status === 'pending').length,
+    };
+  } catch (err) { console.error('pending counts error', err); }
 
   return (
     <div className="min-h-screen flex flex-col font-sans">
+      <PageTitle title="Admin Dashboard" />
       {/* Top Bar */}
       <header className="fixed top-0 left-0 right-0 h-16 bg-gray-900 px-8 flex items-center justify-between z-50">
         <div className="text-white font-black text-xl tracking-tighter">
-          🛍 Mamu Market Admin
+          Mamu Market Admin
         </div>
         <div className="flex items-center gap-4">
           <span className="text-white font-bold text-sm">{user.name}</span>
@@ -399,26 +497,6 @@ const AdminDashboardView: React.FC = () => {
         {/* Sidebar */}
         <aside className="w-64 bg-[#0f0a1e] pt-6 px-3 fixed h-[calc(100vh-64px)] overflow-y-auto">
           {(() => {
-            let pendingCounts: Record<string, number> = {};
-            try {
-              pendingCounts = {
-                'Vendor Approvals': data.vendorRequests?.filter(r => r.status === 'pending').length || 0,
-                'Product Approvals': [
-                  ...data.pendingProducts.filter((p: any) => p.status !== 'rejected'),
-                  ...data.pendingUpdates
-                ].length,
-                'Verification Requests': requests.filter(r => r.request_type === 'verification' && r.status === 'pending').length,
-                'Remove Requests': requests.filter(r => r.request_type === 'product_remove' && r.status === 'pending').length,
-                'Store Requests': requests.filter(r => ['store_name', 'category_remove', 'city_change', 'email_change'].includes(r.request_type) && r.status === 'pending').length,
-                'Account Requests': requests.filter(r => r.request_type === 'account_delete' && r.status === 'pending').length,
-                'Support Tickets': allTickets.filter((r: any) => r.status === 'open').length,
-                'Order Management': allOrders.filter(
-                  (o: any) => o.cancelRequest === 'pending' || o.cancelRequest === 'vendor_approved' || o.cancelRequest === 'vendor_rejected'
-                ).length,
-                'Promo Codes': 0,
-              };
-            } catch (err) { console.error('sidebar badge error', err); }
-
             const groups = [
               {
                 label: 'Dashboard',
@@ -442,7 +520,7 @@ const AdminDashboardView: React.FC = () => {
               },
               {
                 label: 'Support',
-                items: ['Support Tickets'],
+                items: ['Customer Tickets', 'Vendor Tickets', 'Monitored Chats'],
               },
             ];
 
@@ -464,7 +542,9 @@ const AdminDashboardView: React.FC = () => {
               'Category Management': 'fa-tags',
               'Order Management': 'fa-shopping-bag',
               'Product Monitor': 'fa-chart-bar',
-              'Support Tickets': 'fa-headset',
+              'Customer Tickets': 'fa-headset',
+              'Vendor Tickets': 'fa-life-ring',
+              'Monitored Chats': 'fa-comments',
             };
 
             return (
@@ -514,7 +594,7 @@ const AdminDashboardView: React.FC = () => {
                 const approvedProducts = data.approvedProducts;
                 const pendingProducts = data.pendingProducts;
                 const getCommission = (price: number) => price >= 5000 ? 0.10 : price >= 1000 ? 0.15 : 0.20;
-                const deliveredOrders = allOrders.filter((o: any) => o.status === 'Delivered');
+                const deliveredOrders = allOrders.filter((o: any) => (o.status || '').toLowerCase() === 'delivered');
                 const totalRevenue = deliveredOrders.reduce((sum: number, o: any) => {
                   const orderCommission = (o.items || []).reduce((s: number, item: any) => {
                     const price = Number(item.price) || 0;
@@ -535,11 +615,15 @@ const AdminDashboardView: React.FC = () => {
                         { label: 'Total Vendors', value: vendors.length, icon: 'fa-store', color: 'text-purple-600', bg: 'bg-purple-50' },
                         { label: 'Total Customers', value: customers.length, icon: 'fa-users', color: 'text-blue-600', bg: 'bg-blue-50' },
                         { label: 'Active Products', value: approvedProducts.length, icon: 'fa-box', color: 'text-green-600', bg: 'bg-green-50' },
-                        { label: 'Pending Actions', value: totalPending.length, icon: 'fa-clock', color: 'text-amber-600', bg: 'bg-amber-50' },
+                        { label: 'Pending Actions', value: Object.values(pendingCounts).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0), icon: 'fa-clock', color: 'text-amber-600', bg: 'bg-amber-50' },
                       ].map(stat => (
                         <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                           <div className={`w-12 h-12 rounded-2xl ${stat.bg} flex items-center justify-center mb-4`}>
-                            <i className={`fas ${stat.icon} ${stat.color}`}></i>
+                            {stat.icon === 'fa-taka-sign' ? (
+                              <span className={`text-xl font-black ${stat.color}`}>৳</span>
+                            ) : (
+                              <i className={`fas ${stat.icon} ${stat.color}`}></i>
+                            )}
                           </div>
                           <p className="text-3xl font-black text-gray-900">{stat.value}</p>
                           <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">{stat.label}</p>
@@ -560,7 +644,7 @@ const AdminDashboardView: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <p className="font-black text-gray-900 text-sm">৳{order.total?.toLocaleString()}</p>
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${order.status === 'Delivered' ? 'bg-green-50 text-green-600' :
+                                <span className={`inline-flex items-center justify-center h-5 px-2.5 rounded-full text-[10px] font-black leading-none ${order.status === 'Delivered' ? 'bg-green-50 text-green-600' :
                                   order.status === 'Shipped' ? 'bg-blue-50 text-blue-600' :
                                     'bg-amber-50 text-amber-600'
                                   }`}>{order.status}</span>
@@ -571,33 +655,26 @@ const AdminDashboardView: React.FC = () => {
                       </div>
                       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                         <h3 className="font-black text-gray-900 mb-4 uppercase tracking-widest text-sm">Pending Actions</h3>
-                        {totalPending.length === 0 && <p className="text-gray-400 font-bold text-sm">All clear!</p>}
-                        <div className="space-y-3">
-                          {pendingProducts.slice(0, 3).map((p: any) => (
-                            <div key={p.id} className="flex items-center gap-3 py-2 border-b border-gray-50">
-                              <div className="w-8 h-8 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-                                <i className="fas fa-box text-amber-500 text-xs"></i>
-                              </div>
-                              <div>
-                                <p className="font-black text-gray-900 text-sm">{p.name}</p>
-                                <p className="text-xs text-gray-400 font-medium">Product approval pending</p>
-                              </div>
-                              <button onClick={() => setActiveTab('Product Approvals')} className="ml-auto text-xs font-black text-brand-600 hover:underline shrink-0">Review</button>
-                            </div>
-                          ))}
-                          {requests.filter(r => r.request_type === 'verification' && r.status === 'pending').slice(0, 2).map((r: any) => (
-                            <div key={r.id} className="flex items-center gap-3 py-2 border-b border-gray-50">
-                              <div className="w-8 h-8 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
-                                <i className="fas fa-shield-alt text-blue-500 text-xs"></i>
-                              </div>
-                              <div>
-                                <p className="font-black text-gray-900 text-sm">{r.vendor_name}</p>
-                                <p className="text-xs text-gray-400 font-medium">Verification pending</p>
-                              </div>
-                              <button onClick={() => setActiveTab('Verification Requests')} className="ml-auto text-xs font-black text-brand-600 hover:underline shrink-0">Review</button>
-                            </div>
-                          ))}
-                        </div>
+                        {Object.values(pendingCounts).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0) === 0 ? (
+                          <p className="text-gray-400 font-bold text-sm">All clear!</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {Object.entries(pendingCounts)
+                              .filter(([_, count]) => typeof count === 'number' && count > 0)
+                              .map(([category, count]) => (
+                                <div key={category} className="flex items-center gap-3 py-2 border-b border-gray-50">
+                                  <div className="w-8 h-8 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
+                                    <i className="fas fa-exclamation-circle text-amber-500 text-xs"></i>
+                                  </div>
+                                  <div>
+                                    <p className="font-black text-gray-900 text-sm">{count} {category}</p>
+                                    <p className="text-xs text-gray-400 font-medium">Requires your attention</p>
+                                  </div>
+                                  <button onClick={() => setActiveTab(category)} className="ml-auto text-xs font-black text-brand-600 hover:underline shrink-0">Review</button>
+                                </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -618,12 +695,13 @@ const AdminDashboardView: React.FC = () => {
             handleRemoveRequest={handleRemoveRequest}
             handleUpdateApproval={handleUpdateApproval}
             handleCategoryRequest={handleCategoryRequest}
+            handleCategorySuggestion={handleCategorySuggestion}
             handleStoreNameRequest={handleStoreNameRequest}
           />
 
           {(activeTab === 'User Management' || activeTab === 'Vendor Management') && (() => {
             const displayUsers = data.users.filter((u: any) =>
-              activeTab === 'Vendor Management' ? u.role === 'vendor' : u.role !== 'vendor'
+              activeTab === 'Vendor Management' ? u.role === 'vendor' : u.role === 'customer'
             );
             return (
               <div>
@@ -666,12 +744,19 @@ const AdminDashboardView: React.FC = () => {
                             </span>
                             {u.role === 'vendor' && (() => {
                               const getComm = (price: number) => price >= 5000 ? 0.10 : price >= 1000 ? 0.15 : 0.20;
-                              const grossRevenue = allOrders.reduce((sum: number, o: any) => {
+                              
+                              const deliveredForVendor = allOrders.filter((o: any) => {
+                                const st = (o.vendor_statuses && o.vendor_statuses[u.id]) || (o.vendorStatuses && o.vendorStatuses[u.id]) || o.status || '';
+                                return st.toLowerCase() === 'delivered';
+                              });
+
+                              const grossRevenue = deliveredForVendor.reduce((sum: number, o: any) => {
                                 return sum + (o.items || [])
                                   .filter((i: any) => i.vendorId === u.id)
                                   .reduce((s: number, i: any) => s + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0);
                               }, 0);
-                              const commission = allOrders.reduce((sum: number, o: any) => {
+                              
+                              const commission = deliveredForVendor.reduce((sum: number, o: any) => {
                                 return sum + (o.items || [])
                                   .filter((i: any) => i.vendorId === u.id)
                                   .reduce((s: number, i: any) => {
@@ -858,8 +943,14 @@ const AdminDashboardView: React.FC = () => {
           {activeTab === 'Order Management' && (
             <OrderManagementPanel setToast={setToast} />
           )}
-          {activeTab === 'Support Tickets' && (
-            <SupportTicketsPanel setToast={setToast} />
+          {activeTab === 'Customer Tickets' && (
+            <SupportTicketsPanel setToast={setToast} typeFilter="all" onUpdate={refreshAllTickets} />
+          )}
+          {activeTab === 'Vendor Tickets' && (
+            <SupportTicketsPanel setToast={setToast} typeFilter="vendor_tickets" onUpdate={refreshAllTickets} />
+          )}
+          {activeTab === 'Monitored Chats' && (
+            <SupportTicketsPanel setToast={setToast} typeFilter="vendor_inquiry" onUpdate={refreshAllTickets} />
           )}
         </main>
       </div>

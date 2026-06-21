@@ -59,7 +59,7 @@ export const emailTemplates = {
     return await sendCustomEmail(email, name, title, message);
   },
 
-  vendorRequestStatus: async (email: string, name: string, requestType: string, status: 'Approved' | 'Rejected') => {
+  vendorRequestStatus: async (email: string, name: string, requestType: string, status: 'Approved' | 'Rejected' | 'Acknowledged') => {
     const title = `${requestType} Request ${status}`;
     const color = status === 'Approved' ? '#10b981' : '#ef4444';
     const message = `
@@ -81,6 +81,22 @@ export const emailTemplates = {
       <p>Please take 2 minutes to rate your experience and help us improve our service.</p>
       <br/>
       <a href="https://mamumarket.com/feedback" style="display:inline-block; background:#fbbf24; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold; font-size:18px;">★★★★★ Rate Us</a>
+    `;
+    return await sendCustomEmail(email, name, title, message);
+  },
+
+  // Support Tickets
+  ticketReplyAdmin: async (email: string, name: string, ticketId: string, replyText: string) => {
+    const title = `Support Ticket Updated: ${ticketId}`;
+    const message = `
+      <h2>New Reply from Support</h2>
+      <p>Hi ${name},</p>
+      <p>An admin has replied to your support ticket <strong>${ticketId}</strong>:</p>
+      <div style="background:#f9fafb; padding:20px; border-radius:8px; margin:20px 0; border: 1px solid #e5e7eb; font-style: italic;">
+        "${replyText}"
+      </div>
+      <br/>
+      <a href="https://mamumarket.com/contact" style="display:inline-block; background:#7c3aed; color:#fff; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">View My Tickets</a>
     `;
     return await sendCustomEmail(email, name, title, message);
   }

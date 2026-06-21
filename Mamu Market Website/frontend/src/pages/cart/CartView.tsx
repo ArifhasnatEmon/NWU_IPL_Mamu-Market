@@ -5,6 +5,7 @@ import { CartItem, Product, PromoCode } from '../../types';
 import { getShippingFee } from '../../config';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import PageTitle from '../../components/PageTitle';
 import { usePromoCodes } from '../../hooks/useMarketing';
 
 
@@ -88,6 +89,7 @@ const CartView: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-16">
+      <PageTitle title="Shopping Cart" />
       <div className="flex flex-col lg:flex-row gap-16">
         <div className="flex-1 space-y-8">
           <div className="flex items-center justify-between">

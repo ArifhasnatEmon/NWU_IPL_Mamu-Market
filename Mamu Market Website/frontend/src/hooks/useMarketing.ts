@@ -156,9 +156,15 @@ export const useGlobalSettings = (settingId: string) => {
     };
   }, [settingId]);
   // Realtime invalidation
-  const handleRealtimeEvent = useCallback(() => {
-    settingsCache.delete(settingId);
-    fetchSettingCached(settingId).catch(err => console.error('Settings RT refresh error:', err));
+  const handleRealtimeEvent = useCallback((payload: any) => {
+    if (payload.new && payload.new.value !== undefined) {
+      settingsCache.set(settingId, { data: payload.new.value, timestamp: Date.now() });
+      setSetting(payload.new.value);
+      subscribers.get(settingId)?.forEach(cb => cb(payload.new.value));
+    } else {
+      settingsCache.delete(settingId);
+      fetchSettingCached(settingId).catch(err => console.error('Settings RT refresh error:', err));
+    }
   }, [settingId]);
 
   useRealtimeSubscription({

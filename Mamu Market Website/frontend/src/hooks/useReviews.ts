@@ -44,6 +44,30 @@ export function useReviews(filters?: ReviewFilters) {
         mapped = mapped.filter(r => r.productId && vendorProductIds.has(r.productId));
       }
 
+      // Enrich reviews with latest user profiles (name & avatar)
+      const uniqueUserIds = [...new Set(mapped.map(r => r.userId).filter(Boolean))];
+      if (uniqueUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name, avatar')
+          .in('id', uniqueUserIds);
+
+        if (profiles) {
+          const profileMap = new Map(profiles.map(p => [p.id, p]));
+          mapped = mapped.map(r => {
+            const profile = profileMap.get(r.userId);
+            if (profile) {
+              return {
+                ...r,
+                userName: profile.name || r.userName,
+                userAvatar: profile.avatar || r.userAvatar,
+              };
+            }
+            return r;
+          });
+        }
+      }
+
       setReviews(mapped);
       setError(null);
     } catch (err) {

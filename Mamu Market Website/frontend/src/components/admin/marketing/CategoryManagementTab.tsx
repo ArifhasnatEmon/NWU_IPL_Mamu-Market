@@ -104,20 +104,8 @@ const CategoryManagementTab = ({ setToast }: { setToast: (msg: string) => void }
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-        <h3 className="font-black text-gray-900 mb-1">Default Categories</h3>
-        <p className="text-xs text-gray-400 font-medium mb-4">These are fixed and cannot be removed</p>
-        <div className="flex flex-wrap gap-2">
-          {['Electronics', 'Fashion', 'Home & Living', 'Beauty & Health', 'Sports & Outdoor'].map(cat => (
-            <span key={cat} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-black text-xs flex items-center gap-2">
-              <i className="fas fa-lock text-gray-400 text-[10px]"></i>
-              {cat}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-        <h3 className="font-black text-gray-900 mb-1">Custom Categories</h3>
-        <p className="text-xs text-gray-400 font-medium mb-5">Add categories with sub-categories</p>
+        <h3 className="font-black text-gray-900 mb-1">All Categories</h3>
+        <p className="text-xs text-gray-400 font-medium mb-5">Manage and add categories with sub-categories</p>
         <div className="flex gap-3 mb-6 relative">
           <button 
             onClick={() => setShowIconPicker(!showIconPicker)}

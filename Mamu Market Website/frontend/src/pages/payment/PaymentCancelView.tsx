@@ -1,11 +1,13 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import PageTitle from '../../components/PageTitle';
 
 const PaymentCancelView: React.FC = () => {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+      <PageTitle title="Payment Status" />
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center">
         <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <i className="fas fa-exclamation text-3xl text-orange-500"></i>

@@ -2,21 +2,32 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Vendor } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
-import { useVendors } from '../../hooks/useVendors';
+import { useSharedVendors, useSharedProducts } from '../../context/DataContext';
 
 const TopVendorsView: React.FC = () => {
   const { navigateToVendor } = useApp();
   const navigate = useNavigate();
-  const { vendors: dynamicVendors, loading } = useVendors();
+  const { vendors: dynamicVendors, loading } = useSharedVendors();
+  const { products: approvedProducts } = useSharedProducts();
 
-  // Only use dynamic vendors from database
+  // Compute vendor ratings from their products and sort
   const top7Vendors = dynamicVendors && dynamicVendors.length > 0
-    ? [...dynamicVendors].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 7)
+    ? [...dynamicVendors].map(v => {
+        const vendorProducts = approvedProducts.filter(p => p.vendorId === v.id);
+        const ratedProducts = vendorProducts.filter(p => p.rating > 0);
+        const computedRating = ratedProducts.length > 0
+          ? Math.round((ratedProducts.reduce((sum, p) => sum + p.rating, 0) / ratedProducts.length) * 10) / 10
+          : 0;
+        return { ...v, rating: computedRating, productsCount: vendorProducts.length };
+      }).sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 7)
     : [];
 
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Top Rated Stores" />
       <div className="flex items-center justify-between mb-16">
         <div>
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-4 text-gradient">Top Rated Vendors</h1>

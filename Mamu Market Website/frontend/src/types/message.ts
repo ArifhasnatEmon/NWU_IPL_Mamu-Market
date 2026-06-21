@@ -11,6 +11,7 @@ export interface Message {
   read?: boolean;
   date: string;
   timestamp?: string;
+  attachment?: string;
 }
 
 export interface Conversation {

@@ -13,20 +13,45 @@ interface SubscriptionConfig {
   channelName: string;
 }
 
+/**
+ * Throttle wrapper – fires at most once every `delay` ms.
+ * The trailing call is always invoked so the latest event is never lost.
+ */
+function throttle<T extends (...args: any[]) => void>(fn: T, delay: number): T {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let lastArgs: any[] | null = null;
+
+  const throttled = (...args: any[]) => {
+    lastArgs = args;
+    if (timer) return;               // already scheduled
+    fn(...args);                      // fire immediately
+    timer = setTimeout(() => {
+      timer = null;
+      if (lastArgs) fn(...lastArgs);  // trailing edge
+      lastArgs = null;
+    }, delay);
+  };
+
+  return throttled as unknown as T;
+}
+
 export function useRealtimeSubscription(config: SubscriptionConfig) {
   const channelRef = useRef<RealtimeChannel | null>(null);
-
 
   const onEventRef = useRef(config.onEvent);
   onEventRef.current = config.onEvent;
 
+  // Throttle the callback so rapid-fire events (e.g. bulk inserts) don't
+  // cause an avalanche of re-fetches that starve the connection pool.
   const stableCallback = useCallback(
-    (payload: RealtimePostgresChangesPayload<any>) => onEventRef.current(payload),
+    throttle(
+      (payload: RealtimePostgresChangesPayload<any>) => onEventRef.current(payload),
+      2000,  // at most one re-fetch every 2 seconds per channel
+    ),
     [],
   );
 
   useEffect(() => {
-
     if (config.enabled === false) return;
 
     // Remove any pre-existing channel with this name to avoid

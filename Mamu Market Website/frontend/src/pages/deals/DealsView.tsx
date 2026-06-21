@@ -6,14 +6,15 @@ import { Product } from '../../types';
 import ProductCard from '../../components/product/ProductCard';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
+import { useSharedProducts } from '../../context/DataContext';
+import PageTitle from '../../components/PageTitle';
 
 
 const DealsView: React.FC = () => {
   const navigate = useNavigate();
   const { handleAddToCart } = useCart();
   const { wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
-  const { products: approvedProducts, loading: productsLoading } = useApprovedProducts();
+  const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
 
   const onSelectDealType = (type: string) => {
     navigate(`/deals/${type}`);
@@ -118,9 +119,9 @@ const DealsView: React.FC = () => {
     });
     return [...regular].slice(0, 5);
   };
-
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Deals Hub" />
       {/* Hero Section */}
       <div className="text-center max-w-3xl mx-auto mb-20">
         <div className="inline-flex items-center gap-3 bg-rose-50 text-rose-600 px-6 py-2 rounded-full mb-8 border border-rose-100">
@@ -204,7 +205,10 @@ const DealsView: React.FC = () => {
 
       {/* Sectioned Deals (Combined Design) */}
       <div className="space-y-32">
-        {dealSections.map((section, idx) => (
+        {dealSections.map((section, idx) => {
+          const products = getDealProducts(section.type);
+          const hasProducts = products.length > 0;
+          return (
           <section key={section.id} id={section.id} className="scroll-mt-48">
             <div className="flex items-center justify-between mb-12">
               <div className="flex items-center gap-6">
@@ -213,21 +217,23 @@ const DealsView: React.FC = () => {
                 </div>
                 <div>
                   <h2 className={`text-3xl font-black tracking-tight ${section.timer.expired ? 'text-gray-400' : 'text-gray-900'}`}>{section.name}</h2>
-                  <div className="flex items-center gap-3 mt-2">
-                    {section.timer.expired ? (
-                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">⏰ Deal Ended</span>
-                    ) : (
-                      <>
-                        <span className="text-gray-400 font-black uppercase text-[9px] tracking-[0.2em]">Ends in:</span>
-                        <div className="px-3 py-1 bg-brand-50 rounded-lg border border-brand-100 animate-pulse">
-                          <span className="text-brand-600 font-black text-xs tabular-nums tracking-tight">{section.duration}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  {hasProducts && (
+                    <div className="flex items-center gap-3 mt-2">
+                      {section.timer.expired ? (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-100 px-3 py-1 rounded-lg">⏰ Deal Ended</span>
+                      ) : (
+                        <>
+                          <span className="text-gray-400 font-black uppercase text-[9px] tracking-[0.2em]">Ends in:</span>
+                          <div className="px-3 py-1 bg-brand-50 rounded-lg border border-brand-100 animate-pulse">
+                            <span className="text-brand-600 font-black text-xs tabular-nums tracking-tight">{section.duration}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-              {!section.timer.expired && (
+              {!section.timer.expired && hasProducts && (
                 <button
                   onClick={() => onSelectDealType(section.type)}
                   className="text-xs font-black uppercase tracking-widest text-brand-600 hover:translate-x-2 transition-transform flex items-center gap-2"
@@ -246,8 +252,7 @@ const DealsView: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8">
                 {(() => {
-                  const products = getDealProducts(section.type);
-                  if (products.length === 0) return (
+                  if (!hasProducts) return (
                     <div className="col-span-full py-20 text-center bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
                       <p className="text-gray-400 font-bold">More deals coming soon for this category!</p>
                     </div>
@@ -266,7 +271,8 @@ const DealsView: React.FC = () => {
               </div>
             )}
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

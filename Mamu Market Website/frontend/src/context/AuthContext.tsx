@@ -214,6 +214,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Realtime: listen for changes to the current user's profile row
+  // so admin-approved changes (store name, verification, etc.) reflect instantly
+  useEffect(() => {
+    const currentUser = userRef.current;
+    if (!currentUser?.id) return;
+
+    const channel = supabase
+      .channel(`profile-sync-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          const data = payload.new as any;
+          if (!data) return;
+
+          const updatedUser: User = {
+            ...userRef.current!,
+            name: data.name || userRef.current!.name,
+            role: data.role || userRef.current!.role,
+            avatar: data.avatar,
+            status: data.status || 'active',
+            phone: data.phone,
+            storeName: data.store_name,
+            storeDescription: data.store_description,
+            storeCategory: data.store_category,
+            storeCity: data.store_city,
+            banner: data.banner,
+            verified: data.verified,
+            address: data.address,
+            nickname: data.nickname,
+          };
+
+          setUser(updatedUser);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const login = async (email: string, password: string, role: string): Promise<{ success: boolean; error?: string; user?: User }> => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -265,6 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             store_name: data.storeName,
             store_category: data.storeCategory,
             store_city: data.storeCity,
+            store_description: data.storeDescription,
           },
         },
       });

@@ -3,10 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { CartItem, User } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import { getShippingFee } from '../../config';
 import { emailTemplates } from '../../utils/emailTemplates';
+
 
 const CITIES = ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Sylhet', 'Barishal', 'Rangpur', 'Mymensingh', 'Comilla', 'Narayanganj'];
 
@@ -25,7 +27,7 @@ const STEP_PATHS = ['/checkout/delivery', '/checkout/payment', '/checkout/confir
 const STEP_LABELS = ['Delivery', 'Payment', 'Confirmation'];
 
 const CheckoutView: React.FC = () => {
-  const { cart, setCart, cartLoaded } = useCart();
+  const { cart, clearCart, cartLoaded } = useCart();
   const { user } = useAuth();
   const { setToast } = useApp();
   const navigate = useNavigate();
@@ -204,9 +206,23 @@ const CheckoutView: React.FC = () => {
       return;
     }
 
+
+
     if (payment === 'cod') {
       // COD — permanent deduction. Delete the 15-minute lock so it doesn't restore.
       await supabase.from('inventory_locks').delete().eq('order_id', orderId);
+
+      // Permanently decrement the stock using the secure Edge Function
+      try {
+        await supabase.functions.invoke('update-inventory', {
+          body: {
+            action: 'decrement',
+            items: cart.map(i => ({ product_id: i.id, quantity: i.quantity }))
+          }
+        });
+      } catch (err) {
+        console.error('Failed to decrement inventory:', err);
+      }
 
       // Fire Order Confirmation Email (non-blocking)
       if (user.email) {
@@ -216,7 +232,7 @@ const CheckoutView: React.FC = () => {
       }
 
       // Only clear cart AFTER confirmed DB insert
-      setCart([]);
+      clearCart();
       setOrderPlaced(true);
       setPlacing(false);
       navigate('/checkout/success', { state: { orderId: displayOrderId } });
@@ -250,7 +266,7 @@ const CheckoutView: React.FC = () => {
         if (!data.success) throw new Error(data.error || 'Failed to initialize payment gateway');
         
         // Clear cart before redirect since orders are already in DB
-        setCart([]);
+        clearCart();
         
         // Redirect to SSLCommerz gateway
         window.location.href = data.gatewayUrl;
@@ -268,7 +284,8 @@ const CheckoutView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F5F5F8]">
+      <PageTitle title="Checkout" />
       <div className="max-w-4xl mx-auto px-4 py-10">
 
         {/* Header */}

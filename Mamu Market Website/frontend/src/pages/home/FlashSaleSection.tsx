@@ -6,7 +6,7 @@ import { Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
+import { useSharedProducts } from '../../context/DataContext';
 import { useGlobalSettings } from '../../hooks/useMarketing';
 
 const FlashSaleSection: React.FC = () => {
@@ -14,7 +14,7 @@ const FlashSaleSection: React.FC = () => {
   const { user } = useAuth();
   const { handleAddToCart } = useCart();
   const { setSelectedFilter, handleSelectProduct } = useApp();
-  const { products: approvedProducts, loading: productsLoading } = useApprovedProducts();
+  const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
   const userRole = user?.role;
   const { setting: flashPinned } = useGlobalSettings('flash_pinned_products');
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: true });
@@ -79,24 +79,27 @@ const FlashSaleSection: React.FC = () => {
     return (nowTime - new Date(item.pinnedAt).getTime()) < 3 * 24 * 60 * 60 * 1000;
   });
 
-  const regularFlash = pinnedIds.length > 0
-    ? pinnedIds.map(id => allProducts.find(p => p.id === id)).filter(Boolean) as typeof allProducts
-    : allProducts
-        .filter(p => (p as unknown as { dealType?: string }).dealType === 'flash')
-        .filter(p => {
-          const isOutOfStock = (p.inStock as any) === false || (p.inStock as any) === 'false' || p.stockStatus === 'out_of_stock' || p.stockStatus === 'discontinued';
-          return !isOutOfStock;
-        })
-        .sort((a, b) => {
-          // Automated Deal Ranking: Highest discount % and highest reviews
-          const discountA = (a.originalPrice - a.price) / a.originalPrice;
-          const discountB = (b.originalPrice - b.price) / b.originalPrice;
-          const scoreA = (discountA * 100) + ((a.reviewsCount || 0) * 0.1);
-          const scoreB = (discountB * 100) + ((b.reviewsCount || 0) * 0.1);
-          return scoreB - scoreA;
-        });
+  const pinnedProducts = pinnedIds.map(id => allProducts.find(p => p.id === id)).filter(Boolean) as typeof allProducts;
 
-  const flashProducts = regularFlash.slice(0, 3);
+  const automatedFlash = allProducts
+    .filter(p => (p as unknown as { dealType?: string }).dealType === 'flash')
+    .filter(p => !pinnedIds.includes(p.id)) // Prevent duplicates if a pinned product is also automated
+    .filter(p => {
+      const isOutOfStock = (p.inStock as any) === false || (p.inStock as any) === 'false' || p.stockStatus === 'out_of_stock' || p.stockStatus === 'discontinued';
+      return !isOutOfStock;
+    })
+    .sort((a, b) => {
+      // Automated Deal Ranking: Highest discount % and highest reviews
+      const discountA = (a.originalPrice - a.price) / a.originalPrice;
+      const discountB = (b.originalPrice - b.price) / b.originalPrice;
+      const scoreA = (discountA * 100) + ((a.reviewsCount || 0) * 0.1);
+      const scoreB = (discountB * 100) + ((b.reviewsCount || 0) * 0.1);
+      return scoreB - scoreA;
+    });
+
+  const flashProducts = [...automatedFlash, ...pinnedProducts]
+    .filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i) // deduplicate
+    .slice(0, 3);
 
 
 

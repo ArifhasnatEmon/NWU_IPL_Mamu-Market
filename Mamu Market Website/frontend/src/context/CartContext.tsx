@@ -11,6 +11,7 @@ interface CartContextValue {
   handleAddToCart: (product: Product) => void;
   removeFromCart: (id: string) => void;
   updateCartQuantity: (id: string, delta: number) => void;
+  clearCart: () => void;
   cartLoaded: boolean;
 }
 
@@ -180,8 +181,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [syncCartToDB]);
 
+  const clearCart = useCallback(async () => {
+    // 1. Clear React state
+    setCart([]);
+    // 2. Clear localStorage directly
+    try { localStorage.removeItem(LOCAL_CART_KEY); } catch {}
+    // 3. Clear DB directly (bypass syncingRef guard)
+    if (user?.id) {
+      try {
+        await supabase
+          .from('carts')
+          .upsert(
+            { user_id: user.id, items: [], updated_at: new Date().toISOString() },
+            { onConflict: 'user_id' }
+          );
+      } catch (err) {
+        console.error('Cart clear DB error:', err);
+      }
+    }
+  }, [user?.id]);
+
   return (
-    <CartContext.Provider value={{ cart, setCart, isCartOpen, setIsCartOpen, handleAddToCart, removeFromCart, updateCartQuantity, cartLoaded }}>
+    <CartContext.Provider value={{ cart, setCart, isCartOpen, setIsCartOpen, handleAddToCart, removeFromCart, updateCartQuantity, clearCart, cartLoaded }}>
       {children}
     </CartContext.Provider>
   );

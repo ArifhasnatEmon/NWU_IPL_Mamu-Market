@@ -6,12 +6,13 @@ import { Product, Vendor } from '../../types';
 import { getCategoryName } from '../../config';
 import ProductCard from '../../components/product/ProductCard';
 import SkeletonCard from '../../components/ui/SkeletonCard';
+import PageTitle from '../../components/PageTitle';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useVendorProducts, useApprovedProducts } from '../../hooks/useProducts';
-import { useVendors } from '../../hooks/useVendors';
+import { useVendorProducts } from '../../hooks/useProducts';
+import { useSharedProducts, useSharedVendors } from '../../context/DataContext';
 
 const VendorStoreView: React.FC = () => {
   const { id } = useParams();
@@ -20,11 +21,9 @@ const VendorStoreView: React.FC = () => {
   const { setToast, wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
   const navigate = useNavigate();
 
-  const { products: approvedProducts } = useApprovedProducts();
+  const { products: approvedProducts } = useSharedProducts();
+  const { vendors: fetchedVendors, loading: vendorsLoading } = useSharedVendors();
 
-  const { vendors: fetchedVendors, loading: vendorsLoading } = useVendors();
-
-  // Only use dynamic vendors from database
   const allVendors = fetchedVendors;
   const vendor = allVendors.find(v => v.id === id || createSlug(v.name) === id);
 
@@ -47,41 +46,58 @@ const VendorStoreView: React.FC = () => {
   const bannerSrc = vendorFromStorage?.banner || vendor?.banner || '';
   const isVerified = vendorFromStorage ? vendorFromStorage.verified : vendor.verified;
 
-  // Render Products
   const vendorProducts = vendorDynamicProducts.filter(p => p.status === 'approved');
+
+  const ratedProducts = vendorProducts.filter(p => p.rating > 0);
+  const vendorRating = ratedProducts.length > 0
+    ? Math.round((ratedProducts.reduce((sum, p) => sum + p.rating, 0) / ratedProducts.length) * 10) / 10
+    : 0;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <PageTitle title={vendor?.name || 'Vendor Store'} />
       <div className="relative h-[500px] bg-gray-900 overflow-hidden">
         <div style={{ backgroundImage: bannerSrc ? `url(${bannerSrc})` : 'linear-gradient(135deg, #4c1d95, #7c3aed, #a855f7)', backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }} className="w-full h-full opacity-40 scale-110" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-900/50 to-gray-900"></div>
 
         <div className="absolute inset-0 flex items-center justify-center pt-20">
           <div className="text-center max-w-4xl px-4">
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="w-40 h-40 rounded-[3.5rem] bg-white p-2 mx-auto mb-10 shadow-2xl relative"
+            <div className="relative z-10 flex flex-col items-center text-center">
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="relative mb-6"
             >
+              <div className="absolute inset-0 bg-brand-500 blur-3xl opacity-30 rounded-full"></div>
               {vendor?.logo ? (
-                <img src={vendor.logo || 'https://via.placeholder.com/150?text=Logo'} referrerPolicy="no-referrer" className="w-full h-full object-cover rounded-[3rem]" alt={vendor.name} />
+                <img src={vendor.logo} referrerPolicy="no-referrer" alt={vendor.name} className="w-32 h-32 rounded-full border-4 border-white shadow-2xl relative z-10 object-cover" />
               ) : (
-                <div className="w-full h-full rounded-[3rem] flex items-center justify-center font-black text-white text-4xl" style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)' }}>
+                <div className="w-32 h-32 rounded-full bg-brand-500 flex items-center justify-center text-5xl font-black text-white border-4 border-white shadow-2xl relative z-10">
                   {(vendor?.name || 'V').charAt(0).toUpperCase()}
                 </div>
               )}
               {isVerified && (
-                <div className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center text-white border-4 border-white shadow-lg">
-                  <i className="fas fa-check text-xl"></i>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white border-4 border-white shadow-lg z-20">
+                  <i className="fas fa-check text-sm"></i>
                 </div>
               )}
             </motion.div>
+
+            {vendorData?.category && (
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                className="inline-block px-5 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.2em] mb-4"
+              >
+                {vendorData.category.replace(/,/g, ', ')}
+              </motion.div>
+            )}
 
             <motion.h1
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="text-6xl lg:text-8xl font-black text-white mb-8 tracking-tighter"
+              className="text-4xl sm:text-5xl lg:text-6xl font-black text-white mb-10 tracking-tighter leading-tight max-w-4xl mx-auto drop-shadow-sm"
             >
               {vendor?.name}
             </motion.h1>
@@ -90,24 +106,34 @@ const VendorStoreView: React.FC = () => {
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="flex flex-wrap items-center justify-center gap-6"
+              className="inline-flex items-center justify-center bg-white/10 backdrop-blur-xl rounded-[2rem] border border-white/20 shadow-2xl overflow-hidden divide-x divide-white/10"
             >
-              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/20 shadow-xl">
-                <i className="fas fa-star text-amber-400 text-lg"></i>
-                <span className="text-white font-black text-lg">{vendor?.rating} <span className="text-white/50 text-sm font-bold ml-1">Rating</span></span>
+              <div className="flex flex-col items-center px-10 py-5 hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-2 text-amber-400 mb-1">
+                  <i className="fas fa-star text-sm"></i>
+                  <span className="font-black text-2xl text-white">{vendorRating || '—'}</span>
+                </div>
+                <span className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Rating</span>
               </div>
-              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/20 shadow-xl">
-                <i className="fas fa-box text-brand-400 text-lg"></i>
-                <span className="text-white font-black text-lg">{vendorProducts.length} <span className="text-white/50 text-sm font-bold ml-1">Products</span></span>
+              <div className="flex flex-col items-center px-10 py-5 hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-2 text-brand-400 mb-1">
+                  <i className="fas fa-box text-sm"></i>
+                  <span className="font-black text-2xl text-white">{vendorProducts.length}</span>
+                </div>
+                <span className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Products</span>
               </div>
-              <div className="flex items-center gap-3 bg-white/10 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/20 shadow-xl">
-                <i className="fas fa-calendar-alt text-emerald-400 text-lg"></i>
-                <span className="text-white font-black text-lg">{vendor?.joinedDate} <span className="text-white/50 text-sm font-bold ml-1">Joined</span></span>
+              <div className="flex flex-col items-center px-10 py-5 hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-2 text-emerald-400 mb-1">
+                  <i className="fas fa-calendar-alt text-sm"></i>
+                  <span className="font-black text-2xl text-white">{new Date(vendor?.joinedDate || '').getFullYear()}</span>
+                </div>
+                <span className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Joined</span>
               </div>
             </motion.div>
           </div>
         </div>
       </div>
+    </div>
 
       <div className="container mx-auto px-4 py-20">
         <div className="grid lg:grid-cols-4 gap-16">
@@ -115,11 +141,13 @@ const VendorStoreView: React.FC = () => {
             <div className="sticky top-32 space-y-12">
               <div>
                 <h3 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-6">About Store</h3>
-                <p className="text-gray-600 font-medium leading-relaxed">{vendor?.description}</p>
+                <p className="text-gray-600 font-medium leading-relaxed">
+                  {vendorData?.description || ''}
+                </p>
               </div>
               <div>
                 <h3 className="text-xs font-black uppercase tracking-[0.3em] text-gray-400 mb-6">Member Since</h3>
-                <p className="text-gray-900 font-black">{vendor?.joinedDate}</p>
+                <p className="text-gray-900 font-black">{new Date(vendor?.joinedDate || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
               </div>
               {vendorData?.storeCity && (
                 <div className="mt-6">
@@ -260,7 +288,7 @@ const VendorStoreView: React.FC = () => {
                   setTimeout(() => navigate('/messages'), 500);
                 } catch (err) {
                   console.error(err);
-                  setToast('Failed to send message.');
+                  setToast('Error: ' + (err.message || 'Failed to send message.'));
                 }
               }} className="flex-1 py-4 bg-brand-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-brand-800 transition-all">Send Message</button>
             </div>

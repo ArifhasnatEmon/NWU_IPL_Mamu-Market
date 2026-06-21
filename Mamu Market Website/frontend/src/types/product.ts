@@ -9,6 +9,8 @@ export interface Review {
   productId?: string;
   productName?: string;
   productImage?: string;
+  vendorReply?: string;
+  vendorReplyDate?: string;
 }
 
 export interface ColorVariant {
@@ -54,6 +56,8 @@ export interface Product {
   extraImage3?: string;
   rejectReason?: string;
   quantity?: number;
+  shortDescription?: string;
+  shippingReturnPolicy?: string;
 }
 
 export interface ProductFormData {
@@ -64,6 +68,8 @@ export interface ProductFormData {
   originalPrice: string;
   units: string;
   description: string;
+  shortDescription?: string;
+  shippingReturnPolicy?: string;
   mainImage: string;
   extraImage1: string;
   extraImage2: string;

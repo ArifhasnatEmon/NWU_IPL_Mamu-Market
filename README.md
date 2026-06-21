@@ -1,79 +1,88 @@
-# Multi-Vendor E-Commerce Website
+# 🛒 Mamu Market
 
-## Project Overview
+![Mamu Market Banner](https://via.placeholder.com/1200x400/111827/FFFFFF?text=Mamu+Market+-+Multi-Vendor+E-Commerce+Platform)
 
-This project aims to develop a responsive multi-vendor e-commerce website that allows multiple sellers to display and sell their products on a single platform. Customers can browse products from different vendors, place orders, and make secure payments through the system.
+Mamu Market is a modern, high-performance **Multi-Vendor E-Commerce Platform** built for scale and aesthetic appeal. Featuring a cutting-edge tech stack, the platform offers a seamless shopping experience for customers, robust store management for vendors, and comprehensive oversight tools for platform administrators.
 
-The website will be designed to provide a smooth and user-friendly experience across all devices, including mobile phones and desktop computers. The platform will also include vendor management, order tracking, and basic admin control to ensure efficient operation.
+---
 
+## ✨ Key Features
 
-## Key Features
+### 👤 For Customers
+- **Dynamic Shopping Experience**: Beautiful, animated UI powered by React 19 and framer-motion.
+- **Cart & Wishlist**: Real-time cart calculation, wishlist synchronization, and seamless checkout flows.
+- **Order Tracking**: Interactive visual timeline to track order status (Processing, Shipped, Delivered).
+- **Customer Support**: Built-in support ticket system for direct communication with admins.
 
-- Responsive and mobile-friendly design for seamless use across all devices.
-- Secure user authentication with role-based access for Admin, Vendors, and Customers.
-- Multi-vendor product listing system allowing multiple sellers to operate on a single platform.
-- Vendor dashboard for managing products, orders, and earnings.
-- Location-based vendor and product filtering by city or area.
-- Product search, category browsing, and advanced filtering options.
-- Shopping cart supporting products from multiple vendors with order splitting.
-- Integrated payment system including cash-on-delivery and mobile banking options.
-- Order tracking system with real-time status updates for customers and vendors.
-- Product review and rating system with vendor trust score calculation.
-- Verified vendor and product badge system to ensure authenticity and reliability.
-- Live chat feature enabling direct communication between customers and vendors.
-- Price comparison feature for identical products from different vendors.
-- Admin control panel for vendor approval, commission management, and dispute resolution.
-- Analytics and reporting dashboard for monitoring sales, users, and platform performance.
+### 🏪 For Vendors
+- **Store Management**: Dedicated dashboard for inventory tracking, order fulfillment, and revenue analytics.
+- **Product Submissions**: Easily list new products with built-in image cropping and category selection.
+- **Customer Engagement**: Reply directly to customer reviews and manage promotional discount codes.
 
+### ⚙️ For Administrators
+- **Complete Oversight**: Centralized dashboard to monitor GMV, platform revenue, and user metrics.
+- **Approval Workflows**: Review and approve/reject new vendors, products, and marketing campaigns.
+- **Marketing Control**: Manage the homepage Hero Banners, Top Tickers, and global product categories.
+- **Support & Moderation**: Integrated helpdesk for resolving tickets and monitoring user reports.
 
-## Technology/Framework
+---
 
-- HTML, CSS (or Styled-Components) for designing and styling the user interface.
-- JavaScript for implementing application logic and interactivity.
-- React for building a dynamic and responsive user interface.
-- Supabase or Firebase for backend services, including database management, user authentication, and real-time data handling.
+## 🛠 Tech Stack
 
+**Frontend**
+- **Framework**: [React 19](https://react.dev/) + [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Animations**: [Motion](https://motion.dev/) (formerly Framer Motion)
+- **Routing**: [React Router v6](https://reactrouter.com/)
+- **Data Visualization**: [Recharts](https://recharts.org/)
+- **UI Components**: `react-image-crop`, `react-markdown`
 
-## Project Timeline/Plan (10 Weeks)
+**Backend / Infrastructure**
+- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL, Realtime Subscriptions, Edge Functions)
+- **Storage**: Supabase Storage for secure product and profile image hosting
+- **Email Service**: [EmailJS](https://www.emailjs.com/) for automated transactional emails
 
-### Week 1–2: Project Planning and Setup (2 Weeks)
+---
 
-- Research and analyze existing multi-vendor e-commerce platforms.
-- Gather UI/UX design inspiration and create initial wireframes using Figma.
-- Define system requirements, user roles (Admin, Vendor, Customer), and core features.
-- Set up the React project environment and project folder structure.
-- Create basic reusable components such as Header, Footer, Authentication, and Layout.
-- Configure Supabase/Firebase for authentication, database, and storage.
+## 🚀 Getting Started
 
-### Week 3–5: Core Feature Development (3 Weeks)
+### Prerequisites
+- Node.js (v18 or higher recommended)
+- A Supabase Project (with Edge Functions enabled)
+- An EmailJS Account
 
-- Implement user authentication and role-based access control.
-- Develop vendor dashboard for product management (add, edit, delete products).
-- Design and implement product listing, categories, and search functionality.
-- Create customer features including product browsing and shopping cart.
-- Implement order placement and basic order management functionality.
-- Store and retrieve data using Supabase/Firebase database.
+### Installation
 
-### Week 6–7: Advanced Features and Responsiveness (2 Weeks)
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-- Implement location-based vendor and product filtering.
-- Add product review and rating system.
-- Develop vendor trust score or verification badge feature.
-- Apply responsive design principles for all components.
-- Test responsiveness across multiple screen sizes and devices.
+2. **Set up Environment Variables**
+   Create a `.env` file in the `frontend` directory and add your credentials:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   
+   # EmailJS Configuration
+   VITE_EMAILJS_SERVICE_ID=your_service_id
+   VITE_EMAILJS_TEMPLATE_ID_STATUS=your_status_template
+   VITE_EMAILJS_PUBLIC_KEY=your_public_key
+   ```
 
-### Week 8–9: Admin Panel, Optimization, and Integration (2 Weeks)
+3. **Start the Development Server**
+   ```bash
+   npm run dev
+   ```
 
-- Develop admin dashboard for vendor approval, product moderation, and commission management.
-- Implement order tracking and status updates for customers and vendors.
-- Optimize database queries and application performance.
-- Improve UI/UX based on testing feedback.
-- Secure application using proper authentication and access rules.
+---
 
-### Week 10: Testing, Finalization, and Deployment (1 Week)
+## 🛡️ Architecture & Security
+- **Row Level Security (RLS)**: Strictly enforced at the Supabase PostgreSQL layer to ensure data privacy between vendors and customers.
+- **Realtime Synchronization**: Utilizes Supabase Realtime channels to instantly push UI updates for orders, tickets, and inventory changes without manual page refreshes.
+- **Stale-While-Revalidate**: Frontend caching implementation to ensure lightning-fast page loads while quietly updating data in the background.
 
-- Perform comprehensive testing across different browsers and devices.
-- Fix bugs and make final refinements.
-- Build the production-ready version of the application.
-- Deploy the multi-vendor marketplace website.
-- Conduct final testing on the live deployed system.
+---
+
+## 📜 License
+This project is proprietary and confidential. Unauthorized copying, distribution, or use of this source code is strictly prohibited.

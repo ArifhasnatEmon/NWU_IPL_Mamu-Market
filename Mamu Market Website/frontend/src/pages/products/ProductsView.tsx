@@ -8,10 +8,8 @@ import SkeletonCard from '../../components/ui/SkeletonCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
-import { useVendors } from '../../hooks/useVendors';
-
-import { useCategories } from '../../hooks/useSecondary';
+import { useSharedProducts, useSharedVendors, useSharedCategories } from '../../context/DataContext';
+import PageTitle from '../../components/PageTitle';
 import { Category } from '../../types';
 
 const ProductsView: React.FC<{
@@ -27,7 +25,7 @@ const ProductsView: React.FC<{
     handleSelectProduct, navigateToVendor
   } = useApp();
   const userRole = user?.role;
-  const { categories: customCategories, loading: catLoading } = useCategories();
+  const { categories: customCategories, loading: catLoading } = useSharedCategories();
 
   // Use dynamic categories, fallback to static
   const displayCategories = customCategories && customCategories.length > 0 ? customCategories : CATEGORIES;
@@ -43,8 +41,8 @@ const ProductsView: React.FC<{
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'out'>('all');
   const [expandedCats, setExpandedCats] = useState<string[]>(initialCategory ? [initialCategory] : []);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const { products: approvedProducts, loading: productsLoading } = useApprovedProducts();
-  const { vendors: fetchedVendors } = useVendors();
+  const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
+  const { vendors: fetchedVendors } = useSharedVendors();
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(9);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -175,7 +173,7 @@ const ProductsView: React.FC<{
       if (activeFilter === 'daily' && (!p.isSale || p.price > 3000)) return false;
       if (activeFilter === 'weekly' && (!p.isSale || (p.price > 2000 && p.price < 5000))) return false;
       if (activeFilter === 'monthly' && (!p.isSale || p.price < 2000)) return false;
-      if (activeFilter === 'official' && !p.vendor.includes('Official') && !['techworld', 'fashionhub'].includes(p.vendorId)) return false;
+      if (activeFilter === 'official' && !p.vendor.includes('Official')) return false;
 
       // Filter out out-of-stock items from curated collections to prevent a bad customer experience
       const isCuratedCollection = ['new', 'best', 'trending', 'deals', 'daily', 'weekly', 'monthly', 'official'].includes(activeFilter);
@@ -231,26 +229,33 @@ const ProductsView: React.FC<{
 
   const dynamicVendors = useMemo(() => {
     return fetchedVendors.filter(u => u.status === 'approved' || u.status === 'active')
-      .map((u: Record<string, any>): Vendor => ({
-        id: u.id,
-        name: u.name,
-        storeName: u.name,
-        avatar: u.logo,
-        logo: u.logo,
-        banner: u.banner,
-        category: u.category,
-        rating: u.rating || 0,
-        productsCount: u.productsCount || 0,
-        verified: u.verified || false,
-        joinedDate: u.joinedDate || new Date().toISOString(),
-        description: u.description || '',
-        storeCity: u.storeCity,
-        socialFacebook: u.socialFacebook,
-        socialInstagram: u.socialInstagram,
-        socialYoutube: u.socialYoutube,
-        socialWhatsapp: u.socialWhatsapp,
-      }));
-  }, [fetchedVendors]);
+      .map((u: Record<string, any>): Vendor => {
+        const vendorProducts = approvedProducts.filter(p => p.vendorId === u.id);
+        const ratedProducts = vendorProducts.filter(p => p.rating > 0);
+        const computedRating = ratedProducts.length > 0
+          ? Math.round((ratedProducts.reduce((sum, p) => sum + p.rating, 0) / ratedProducts.length) * 10) / 10
+          : 0;
+        return {
+          id: u.id,
+          name: u.name,
+          storeName: u.name,
+          avatar: u.logo,
+          logo: u.logo,
+          banner: u.banner,
+          category: u.category,
+          rating: computedRating,
+          productsCount: vendorProducts.length,
+          verified: u.verified || false,
+          joinedDate: u.joinedDate || new Date().toISOString(),
+          description: u.description || '',
+          storeCity: u.storeCity,
+          socialFacebook: u.socialFacebook,
+          socialInstagram: u.socialInstagram,
+          socialYoutube: u.socialYoutube,
+          socialWhatsapp: u.socialWhatsapp,
+        };
+      });
+  }, [fetchedVendors, approvedProducts]);
   const topVendors = useMemo(() => [...dynamicVendors].sort((a, b) => b.rating - a.rating).slice(0, 3), [dynamicVendors]);
 
   return (
@@ -259,6 +264,7 @@ const ProductsView: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       className="container mx-auto px-4 py-16"
     >
+      <PageTitle title={selectedSubCat ? selectedSubCat : selectedCat ? (displayCategories.find(c => c.id === selectedCat)?.name || 'Products') : customSubParam ? customSubParam : customCatParam ? customCatParam : 'All Products'} />
       <div className="flex flex-col lg:flex-row gap-16">
         {/* Mobile Filter Toggle */}
         <div className="lg:hidden flex items-center justify-between gap-4 mb-8">
@@ -331,7 +337,7 @@ const ProductsView: React.FC<{
                         className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${selectedCat === cat.id ? 'bg-gray-900 text-white shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:bg-gray-50'}`}
                       >
                         <div className="flex items-center gap-3">
-                          <i className={`fas fa-${cat.id === 'electronics' ? 'laptop' : cat.id === 'fashion' ? 'tshirt' : cat.id === 'home-living' ? 'couch' : cat.id === 'beauty' ? 'spa' : 'basketball-ball'} text-xs opacity-70`}></i>
+                          <i className={`fas ${cat.icon || 'fa-tag'} text-xs opacity-70`}></i>
                           <span>{cat.name}</span>
                         </div>
                         <i className={`fas fa-chevron-right text-[10px] transition-transform duration-300 ${expandedCats.includes(cat.id) ? 'rotate-90' : ''}`}></i>

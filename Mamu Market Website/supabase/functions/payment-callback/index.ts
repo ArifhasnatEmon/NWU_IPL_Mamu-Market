@@ -48,6 +48,35 @@ serve(async (req) => {
           .delete()
           .eq('order_id', tran_id);
 
+        // Fetch the order to get the items
+        const { data: orderData } = await supabase
+          .from('orders')
+          .select('items')
+          .eq('parent_order_id', tran_id)
+          .single();
+
+        if (orderData && orderData.items) {
+          const items = typeof orderData.items === 'string' ? JSON.parse(orderData.items) : orderData.items;
+          // Decrement stock for each item
+          for (const item of items) {
+            if (item.id && item.quantity) {
+              const { data: product } = await supabase
+                .from('products')
+                .select('units')
+                .eq('id', item.id)
+                .single();
+              
+              if (product) {
+                const newUnits = Math.max(0, (product.units || 0) - item.quantity);
+                await supabase
+                  .from('products')
+                  .update({ units: newUnits })
+                  .eq('id', item.id);
+              }
+            }
+          }
+        }
+
         return Response.redirect(`${FRONTEND_URL}/payment/success?order_id=${tran_id}`, 303);
       }
     }

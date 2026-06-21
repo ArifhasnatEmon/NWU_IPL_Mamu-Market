@@ -6,8 +6,10 @@ import { Product } from '../../types';
 import ProductCard from '../../components/product/ProductCard';
 import SkeletonCard from '../../components/ui/SkeletonCard';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
+import { useSharedProducts } from '../../context/DataContext';
 
 const DealsListingView: React.FC<{
   dealType: 'daily' | 'weekly' | 'monthly' | 'flash'
@@ -15,7 +17,7 @@ const DealsListingView: React.FC<{
   const navigate = useNavigate();
   const { handleAddToCart } = useCart();
   const { wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
-  const { products: dynamicProducts } = useApprovedProducts();
+  const { products: dynamicProducts } = useSharedProducts();
   const [timeLeft, setTimeLeft] = React.useState({ d: 0, h: 0, m: 0, s: 0, expired: true });
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -149,6 +151,7 @@ const DealsListingView: React.FC<{
 
   return (
     <div className="container mx-auto px-4 py-12">
+      <PageTitle title={getTitle()} />
       {/* Header */}
       <div className="mb-12">
         <button

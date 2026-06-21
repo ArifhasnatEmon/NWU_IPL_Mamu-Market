@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useOrders } from '../../hooks/useOrders';
 import { Order, OrderItem } from '../../types';
 
@@ -22,8 +23,15 @@ const VendorAnalyticsView: React.FC = () => {
     const vendorOrders = allOrders.filter((o: Order) => o.items.some((i: OrderItem) => i.vendorId === user?.id));
     
     // Vendor Status Fallback
-    const getVendorStatus = (o: Order): string => 
-      (o.vendorStatuses && o.vendorStatuses[user?.id!]) ? String(o.vendorStatuses[user?.id!]) : o.status;
+    const getVendorStatus = (o: Order): string => {
+      let st = (o.vendorStatuses && o.vendorStatuses[user?.id!]) ? String(o.vendorStatuses[user?.id!]) : o.status || '';
+      const n = st.toLowerCase();
+      if (n === 'pending' || n === 'processing') return 'Processing';
+      if (n === 'shipped') return 'Shipped';
+      if (n === 'delivered') return 'Delivered';
+      if (n === 'cancelled' || n === 'failed') return 'Cancelled';
+      return st ? st.charAt(0).toUpperCase() + st.slice(1) : 'Processing';
+    };
     
     const activeVendorOrders = vendorOrders.filter((o: Order) => getVendorStatus(o) !== 'Cancelled');
     
@@ -78,9 +86,9 @@ const VendorAnalyticsView: React.FC = () => {
       topProducts
     });
   }, [user, allOrders]);
-
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="Store Analytics" />
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-black text-gray-900">Store Analytics</h1>

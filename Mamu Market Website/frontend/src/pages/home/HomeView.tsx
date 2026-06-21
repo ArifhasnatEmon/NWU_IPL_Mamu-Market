@@ -7,13 +7,10 @@ import ProductCard from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
-import { useVendors } from '../../hooks/useVendors';
+import { useSharedProducts, useSharedVendors, useSharedCategories } from '../../context/DataContext';
 import { useGlobalSettings } from '../../hooks/useMarketing';
-import { useCategories } from '../../hooks/useSecondary';
 import { isExpired } from '../../utils/expiry';
-
-
+import PageTitle from '../../components/PageTitle';
 
 const HomeView: React.FC = () => {
   const navigate = useNavigate();
@@ -23,41 +20,19 @@ const HomeView: React.FC = () => {
     wishlist, handleToggleWishlist, setSelectedCategory, 
     setSelectedFilter, handleSelectProduct, recentlyViewed 
   } = useApp();
-  const { products: approvedProducts, loading: productsLoading } = useApprovedProducts();
-  const { vendors: fetchedVendors } = useVendors();
+  const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
+  const { vendors: fetchedVendors } = useSharedVendors();
   const userRole = user?.role;
   const { setting: heroBanners } = useGlobalSettings('hero_banners');
-  const { categories: dbCategories } = useCategories();
+  const { categories: dbCategories } = useSharedCategories();
   const [slide, setSlide] = useState(0);
 
-  const defaultSlides = [
-    { 
-      img: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=1200&auto=format&fit=crop',
-      title: 'Elevate Your Everyday',
-      subtitle: 'Discover premium collections curated for the modern lifestyle.',
-      buttonText: 'Explore Shop',
-      buttonLink: '/products'
-    },
-    {
-      img: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?q=80&w=1200&auto=format&fit=crop',
-      title: 'The Future of Tech',
-      subtitle: 'Experience cutting-edge innovation from world-class vendors.',
-      buttonText: 'Shop Electronics',
-      buttonLink: '/products'
-    },
-    {
-      img: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?q=80&w=1200&auto=format&fit=crop',
-      title: 'Best Gadget and Gear',
-      subtitle: 'Grab the best gadgets and gear from the most trusted sellers.',
-      buttonText: 'View Deals',
-      buttonLink: '/deals/flash'
-    }
-  ];
+  const defaultSlides: any[] = [];
 
-  // Filter out expired slides, fall back to defaults if all expired
+  // Filter out expired slides
   const rawSlides = (heroBanners && heroBanners.slides && heroBanners.slides.length > 0) ? heroBanners.slides : defaultSlides;
   const activeSlides = rawSlides.filter((s: any) => !isExpired(s.expiresAt));
-  const slides = activeSlides.length > 0 ? activeSlides : defaultSlides;
+  const slides = activeSlides;
 
   useEffect(() => {
     setSlide(0); // Reset to first slide when slides change
@@ -72,6 +47,7 @@ const HomeView: React.FC = () => {
       animate={{ opacity: 1 }}
       className="space-y-24 pb-32"
     >
+      <PageTitle title="Mamu Market" />
       {/* Hero */}
       {slides.length > 0 && (
         <section className="container mx-auto px-4 pt-8">
@@ -100,20 +76,23 @@ const HomeView: React.FC = () => {
                   alt="Hero" 
                 />
 
-                <div className="relative z-20 h-full flex flex-col justify-center pl-12 pr-6 sm:pl-16 sm:pr-8 lg:pl-20 lg:pr-12 max-w-xs sm:max-w-sm lg:max-w-lg">
-                  <motion.span 
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5, duration: 0.8 }}
-                    className="gradient-success text-white text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] px-5 sm:px-6 py-2 sm:py-2.5 rounded-full w-fit mb-4 sm:mb-6 shadow-xl shadow-emerald-500/20"
-                  >
-                    New Season Arrival
-                  </motion.span>
+                <div className="relative z-20 h-full flex flex-col justify-center pl-12 pr-6 sm:pl-16 sm:pr-8 lg:pl-20 lg:pr-12 max-w-sm sm:max-w-md lg:max-w-2xl">
+                  {(slides[slide].badge === undefined ? true : !!slides[slide].badge) && (
+                    <motion.span 
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5, duration: 0.8 }}
+                      className="bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] px-5 sm:px-6 py-2 sm:py-2.5 rounded-full w-fit mb-6 shadow-2xl shadow-black/20"
+                    >
+                      {slides[slide].badge !== undefined ? slides[slide].badge : 'New Season Arrival'}
+                    </motion.span>
+                  )}
                   <motion.h1 
                     initial={{ opacity: 0, y: 50, filter: 'blur(10px)' }}
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     transition={{ delay: 0.7, duration: 0.8 }}
-                    className="text-4xl sm:text-5xl lg:text-6xl font-black text-white mb-4 sm:mb-6 leading-[0.95] tracking-tighter text-balance"
+                    className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight text-balance drop-shadow-2xl"
+                    style={{ textShadow: '0 4px 30px rgba(0,0,0,0.6)' }}
                   >
                     {slides[slide].title}
                   </motion.h1>
@@ -121,7 +100,8 @@ const HomeView: React.FC = () => {
                     initial={{ opacity: 0, y: 30 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.9, duration: 0.8 }}
-                    className="text-base sm:text-lg lg:text-xl text-white/80 mb-6 sm:mb-8 max-w-2xl font-medium leading-relaxed text-balance"
+                    className="text-lg sm:text-xl lg:text-2xl text-white/95 mb-10 max-w-xl font-medium leading-relaxed text-balance drop-shadow-lg"
+                    style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
                   >
                     {slides[slide].subtitle || slides[slide].sub}
                   </motion.p>
@@ -133,9 +113,9 @@ const HomeView: React.FC = () => {
                   >
                       <button 
                         onClick={() => navigate(slides[slide].buttonLink || '/products')} 
-                        className="px-8 sm:px-12 py-4 sm:py-5 gradient-primary text-white rounded-2xl font-black text-base sm:text-lg hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-brand-500/30"
+                        className="px-8 sm:px-10 py-4 bg-white text-gray-900 rounded-full font-black text-base sm:text-lg hover:scale-105 active:scale-95 transition-all shadow-xl hover:shadow-2xl shadow-black/20 flex items-center gap-3"
                       >
-                        {slides[slide].buttonText || 'Explore Shop'}
+                        {slides[slide].buttonText || 'Explore Shop'} <i className="fas fa-arrow-right text-sm"></i>
                       </button>
                   </motion.div>
                 </div>

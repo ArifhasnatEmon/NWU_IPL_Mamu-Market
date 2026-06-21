@@ -26,7 +26,11 @@ serve(async (req) => {
 
     const emailjsResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Origin': 'https://mamumarket.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
       body: JSON.stringify({
         service_id: EMAILJS_SERVICE_ID,
         template_id: EMAILJS_TEMPLATE_ID,
@@ -37,7 +41,10 @@ serve(async (req) => {
 
     if (!emailjsResponse.ok) {
       const errorText = await emailjsResponse.text();
-      throw new Error(`EmailJS API error: ${errorText}`);
+      return new Response(
+        JSON.stringify({ success: false, error: `EmailJS API error: ${errorText}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(

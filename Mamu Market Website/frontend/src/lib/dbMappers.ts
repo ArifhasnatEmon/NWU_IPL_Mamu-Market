@@ -62,6 +62,8 @@ export function mapProduct(row: Partial<Database['public']['Tables']['products']
     extraImage2: row.extra_image_2 || '',
     extraImage3: row.extra_image_3 || '',
     rejectReason: row.reject_reason || '',
+    shortDescription: row.short_description || '',
+    shippingReturnPolicy: row.shipping_return_policy || '',
   };
 }
 
@@ -101,28 +103,17 @@ export function mapReview(row: Record<string, any>): Review {
     userAvatar: row.user_avatar || '',
     rating: row.rating || 0,
     comment: row.comment || '',
-    date: row.date || row.created_at || '',
+    date: row.created_at || row.date || '',
     productId: row.product_id || '',
     productName: row.product_name || '',
     productImage: row.product_image || '',
+    vendorReply: row.vendor_reply || undefined,
+    vendorReplyDate: row.vendor_reply_date || undefined,
   };
 }
 
 
-export function mapNotification(row: Record<string, any>) {
-  return {
-    id: row.id,
-    userId: row.user_id || '',
-    orderId: row.order_id || '',
-    title: row.title || '',
-    message: row.message || '',
-    type: row.type || 'system',
-    link: row.link || '',
-    read: row.read ?? false,
-    date: row.date || '',
-    createdAt: row.created_at || '',
-  };
-}
+
 
 
 export function mapTicket(row: Record<string, any>) {

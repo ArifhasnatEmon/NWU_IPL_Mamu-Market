@@ -5,16 +5,17 @@ import { Product } from '../../types';
 import ProductCard from '../../components/product/ProductCard';
 import SkeletonCard from '../../components/ui/SkeletonCard';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useApprovedProducts } from '../../hooks/useProducts';
+import { useSharedProducts } from '../../context/DataContext';
 
 const WishlistView: React.FC = () => {
   const { wishlist, handleToggleWishlist, handleSelectProduct } = useApp();
   const { handleAddToCart, setIsCartOpen } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { products: approvedProducts } = useApprovedProducts();
+  const { products: approvedProducts } = useSharedProducts();
 
   const [isLoading, setIsLoading] = React.useState(true);
   React.useEffect(() => {
@@ -62,6 +63,7 @@ const WishlistView: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-20">
+      <PageTitle title="My Wishlist" />
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-12">
           <div>

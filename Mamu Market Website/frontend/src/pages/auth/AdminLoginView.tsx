@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 
 const AdminLoginView: React.FC = () => {
   const { login, user } = useAuth();
@@ -37,6 +38,7 @@ const AdminLoginView: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <PageTitle title="Admin Login" />
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-10">
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-6">

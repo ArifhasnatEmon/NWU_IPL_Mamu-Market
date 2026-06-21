@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
+import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { useReviews } from '../../hooks/useReviews';
 import { Review } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 const VendorReviewsView: React.FC = () => {
   const { user } = useAuth();
@@ -19,17 +21,32 @@ const VendorReviewsView: React.FC = () => {
 
   const totalReviews = reviewsToDisplay.length;
   const avgRating = totalReviews > 0 
-    ? (reviewsToDisplay.reduce((acc, r) => acc + r.rating, 0) / totalReviews).toFixed(1) 
+    ? (reviewsToDisplay.reduce((acc, r) => acc + Number(r.rating), 0) / totalReviews).toFixed(1) 
     : '0.0';
   
   const ratingCounts = [5, 4, 3, 2, 1].map(star => ({
     star,
-    count: reviewsToDisplay.filter(r => Math.round(r.rating) === star).length,
-    percentage: totalReviews > 0 ? (reviewsToDisplay.filter(r => Math.round(r.rating) === star).length / totalReviews) * 100 : 0
+    count: reviewsToDisplay.filter(r => Math.round(Number(r.rating)) === star).length,
+    percentage: totalReviews > 0 ? (reviewsToDisplay.filter(r => Math.round(Number(r.rating)) === star).length / totalReviews) * 100 : 0
   }));
 
-  const handleReplySubmit = () => {
-    if (!replyText.trim()) return;
+  const handleReplySubmit = async () => {
+    if (!replyText.trim() || !replyModal) return;
+    
+    const { error } = await supabase
+      .from('reviews')
+      .update({ 
+        vendor_reply: replyText,
+        vendor_reply_date: new Date().toISOString()
+      })
+      .eq('id', replyModal);
+
+    if (error) {
+      setToast('Failed to post reply.');
+      console.error(error);
+      return;
+    }
+
     setToast('Reply posted successfully!');
     setReplyModal(null);
     setReplyText('');
@@ -47,9 +64,9 @@ const VendorReviewsView: React.FC = () => {
       year: 'numeric', month: 'short', day: 'numeric'
     });
   };
-
   return (
     <div className="container mx-auto px-4 py-12 lg:py-20">
+      <PageTitle title="Customer Reviews" />
       <div className="max-w-6xl mx-auto">
         <div className="mb-12">
           <h1 className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter mb-4">Customer Reviews</h1>
@@ -175,6 +192,18 @@ const VendorReviewsView: React.FC = () => {
                     <p className="text-gray-600 font-medium leading-relaxed mb-6">
                       "{review.comment}"
                     </p>
+                    {review.vendorReply && (
+                      <div className="bg-gray-50 rounded-2xl p-5 mb-6 border border-gray-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <i className="fas fa-store text-brand-600 text-xs"></i>
+                          <span className="text-xs font-black uppercase tracking-widest text-brand-600">Your Reply</span>
+                          {review.vendorReplyDate && (
+                            <span className="text-[10px] text-gray-400 font-bold ml-auto">{formatDate(review.vendorReplyDate)}</span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm font-medium leading-relaxed">{review.vendorReply}</p>
+                      </div>
+                    )}
                     <div className="flex gap-3">
                       <button 
                         onClick={() => setReplyModal(review.id)}
