@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Product } from '../../types';
+import { useSharedSponsoredProducts } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 
 const ProductCard: React.FC<{ 
   product: Product, 
@@ -9,11 +11,14 @@ const ProductCard: React.FC<{
   onToggleWishlist: (id: string) => void,
   isWishlisted: boolean,
   userRole?: string,
-  viewMode?: 'grid' | 'list'
-}> = ({ product, onAddToCart, onSelect, onToggleWishlist, isWishlisted, userRole, viewMode = 'grid' }) => {
+  viewMode?: 'grid' | 'list',
+  isSponsored?: boolean
+}> = ({ product, onAddToCart, onSelect, onToggleWishlist, isWishlisted, userRole, viewMode = 'grid', isSponsored }) => {
   const [activeImage, setActiveImage] = useState(product.image);
   const [selectedColor, setSelectedColor] = useState<string | null>(product.colors?.[0]?.name || null);
   const discount = Math.round((1 - product.price / product.originalPrice) * 100);
+  const { user } = useAuth();
+  const activeUserRole = user?.role || userRole;
 
   const resolvedVendorName = product.vendor || 'Unknown Vendor';
 
@@ -25,6 +30,9 @@ const ProductCard: React.FC<{
   
   const isOutOfStock = (product.inStock as any) === false || (product.inStock as any) === 'false' || product.stockStatus === 'out_of_stock' || product.stockStatus === 'discontinued';
   const isDiscontinued = product.stockStatus === 'discontinued';
+  
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
+  const actuallySponsored = isSponsored || sponsoredProductIds.includes(product.id);
   
   if (viewMode === 'list') {
     return (
@@ -56,6 +64,7 @@ const ProductCard: React.FC<{
               {(product as any).dealType === 'weekly' && <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm bg-indigo-500 text-white flex items-center gap-1"><i className="fas fa-calendar-week"></i> Weekly</span>}
               {(product as any).dealType === 'monthly' && <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm bg-emerald-500 text-white flex items-center gap-1"><i className="fas fa-calendar-alt"></i> Monthly</span>}
               {(product as any).dealType === 'flash' && <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm bg-amber-500 text-white flex items-center gap-1"><i className="fas fa-fire"></i> Flash</span>}
+              {actuallySponsored && <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm bg-amber-400 text-gray-900 flex items-center gap-1"><i className="fas fa-star text-[8px]"></i> Promoted</span>}
             </div>
           )}
           <h3 className="text-lg font-black text-gray-900 mb-1 leading-tight">
@@ -122,15 +131,18 @@ const ProductCard: React.FC<{
               {(product as any).dealType === 'weekly' && <span className="text-[7px] font-black uppercase px-2 py-1 rounded-full shadow-lg bg-indigo-500 text-white flex items-center gap-1"><i className="fas fa-calendar-week"></i> Weekly</span>}
               {(product as any).dealType === 'monthly' && <span className="text-[7px] font-black uppercase px-2 py-1 rounded-full shadow-lg bg-emerald-500 text-white flex items-center gap-1"><i className="fas fa-calendar-alt"></i> Monthly</span>}
               {(product as any).dealType === 'flash' && !(product as any).dealType?.includes('daily') && <span className="text-[7px] font-black uppercase px-2 py-1 rounded-full shadow-lg bg-amber-500 text-white flex items-center gap-1"><i className="fas fa-fire"></i> Flash</span>}
+              {actuallySponsored && <span className="text-[7px] font-black uppercase px-2 py-1 rounded-full shadow-lg bg-amber-400 text-gray-900 flex items-center gap-1"><i className="fas fa-star text-[6px]"></i> Promoted</span>}
             </>
           )}
         </div>
-        <button
-          onClick={e => { e.stopPropagation(); onToggleWishlist(product.id); }}
-          className={`absolute top-3 right-3 z-20 w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-sm ${isWishlisted ? 'bg-rose-500 text-white' : 'bg-white/80 text-gray-400 hover:text-rose-500 hover:bg-white'}`}
-        >
-          <i className={`${isWishlisted ? 'fas' : 'far'} fa-heart text-xs`}></i>
-        </button>
+        {activeUserRole !== 'vendor' && (
+          <button
+            onClick={e => { e.stopPropagation(); onToggleWishlist(product.id); }}
+            className={`absolute top-3 right-3 z-20 w-8 h-8 rounded-xl flex items-center justify-center transition-all shadow-sm ${isWishlisted ? 'bg-rose-500 text-white' : 'bg-white/80 text-gray-400 hover:text-rose-500 hover:bg-white'}`}
+          >
+            <i className={`${isWishlisted ? 'fas' : 'far'} fa-heart text-xs`}></i>
+          </button>
+        )}
       </div>
       <div className="p-4 flex flex-col flex-1">
         <div className="mb-1.5">

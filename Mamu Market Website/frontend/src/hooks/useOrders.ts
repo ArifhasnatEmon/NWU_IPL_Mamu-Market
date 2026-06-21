@@ -5,8 +5,19 @@ import { mapOrder } from '../lib/dbMappers';
 import { useRealtimeSubscription } from './useRealtimeSubscription';
 
 export function useOrders(user?: User | null) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `mm_orders_${user?.id}`;
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (!user?.id) return [];
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!user?.id) return false;
+    return !localStorage.getItem(cacheKey);
+  });
   const [error, setError] = useState<Error | null>(null);
 
   const fetchOrders = async () => {
@@ -16,7 +27,7 @@ export function useOrders(user?: User | null) {
       return;
     }
 
-    setLoading(true);
+    if (orders.length === 0) setLoading(true);
     try {
       let query = supabase
         .from('orders')
@@ -34,7 +45,9 @@ export function useOrders(user?: User | null) {
 
       if (dbErr) throw dbErr;
 
-      setOrders((data || []).map(mapOrder));
+      const mapped = (data || []).map(mapOrder);
+      setOrders(mapped);
+      localStorage.setItem(cacheKey, JSON.stringify(mapped));
       setError(null);
     } catch (err) {
       console.error('useOrders error:', err);

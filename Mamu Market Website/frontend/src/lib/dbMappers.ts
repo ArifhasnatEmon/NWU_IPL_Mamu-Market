@@ -15,7 +15,7 @@ export function mapProduct(row: Partial<Database['public']['Tables']['products']
     const referenceDate = row.approved_at || row.created_at;
     if (referenceDate) {
       const daysSince = (Date.now() - new Date(referenceDate).getTime()) / (1000 * 60 * 60 * 24);
-      isNew = daysSince <= 7;
+      isNew = daysSince <= 2;
     } else {
       isNew = false;
     }

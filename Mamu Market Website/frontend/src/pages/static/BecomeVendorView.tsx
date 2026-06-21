@@ -440,7 +440,7 @@ const BecomeVendorView: React.FC = () => {
         </div>
       </div>
       {showTermsModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowTermsModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-10 w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-2xl font-black text-gray-900 mb-6">Merchant Terms</h3>
             <div className="text-sm text-gray-500 font-medium space-y-4 leading-relaxed">

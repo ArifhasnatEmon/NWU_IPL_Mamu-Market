@@ -8,7 +8,7 @@ import SkeletonCard from '../../components/ui/SkeletonCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useApp } from '../../context/AppContext';
-import { useSharedProducts, useSharedVendors, useSharedCategories } from '../../context/DataContext';
+import { useSharedProducts, useSharedVendors, useSharedCategories, useSharedSponsoredProducts } from '../../context/DataContext';
 import PageTitle from '../../components/PageTitle';
 import { Category } from '../../types';
 
@@ -43,6 +43,7 @@ const ProductsView: React.FC<{
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { products: approvedProducts, loading: productsLoading } = useSharedProducts();
   const { vendors: fetchedVendors } = useSharedVendors();
+  const { sponsoredProductIds } = useSharedSponsoredProducts();
   const [isLoading, setIsLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(9);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
@@ -126,7 +127,7 @@ const ProductsView: React.FC<{
           if (p.isNew === false || (p.isNew as any) === 'false') return false;
           const added = p.approvedAt || (p as any).createdAt;
           if (!added) return false;
-          return (Date.now() - new Date(added).getTime()) / (1000 * 60 * 60 * 24) <= 30;
+          return (Date.now() - new Date(added).getTime()) / (1000 * 60 * 60 * 24) <= 2;
         })(),
         inStock: p.inStock !== false && (p.inStock as any) !== 'false' && (Number(p.units) || 0) > 0,
         description: p.description || '',
@@ -202,6 +203,12 @@ const ProductsView: React.FC<{
       if (aIsOutOfStock && !bIsOutOfStock) return 1;
       if (!aIsOutOfStock && bIsOutOfStock) return -1;
 
+      // Sponsored products appear first
+      const aIsSponsored = sponsoredProductIds.includes(a.id);
+      const bIsSponsored = sponsoredProductIds.includes(b.id);
+      if (aIsSponsored && !bIsSponsored) return -1;
+      if (!aIsSponsored && bIsSponsored) return 1;
+
       if (sortBy === 'price-low') return a.price - b.price;
       if (sortBy === 'price-high') return b.price - a.price;
       if (sortBy === 'popular') return b.reviewsCount - a.reviewsCount;
@@ -219,7 +226,7 @@ const ProductsView: React.FC<{
       if (aIsNew && !bIsNew) return -1;
       return 0;
     });
-  }, [allProducts, selectedCat, customCatParam, customSubParam, selectedSubCat, minPrice, maxPrice, selectedRating, selectedVendors, onlyOnSale, wishlistOnly, initialFilter, urlFilterParam, stockFilter, searchQuery, sortBy, wishlist]);
+  }, [allProducts, selectedCat, customCatParam, customSubParam, selectedSubCat, minPrice, maxPrice, selectedRating, selectedVendors, onlyOnSale, wishlistOnly, initialFilter, urlFilterParam, stockFilter, searchQuery, sortBy, wishlist, sponsoredProductIds]);
 
   const finalProducts = filtered;
 

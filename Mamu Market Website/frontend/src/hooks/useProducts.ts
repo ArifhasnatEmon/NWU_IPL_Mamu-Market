@@ -149,8 +149,19 @@ export function useProduct(id?: string) {
 }
 
 export function useVendorProducts(vendorId?: string) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cacheKey = `mm_vp_${vendorId}`;
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (!vendorId) return [];
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!vendorId) return false;
+    return !localStorage.getItem(cacheKey);
+  });
   const [error, setError] = useState<Error | null>(null);
 
   const fetchProducts = async () => {
@@ -169,7 +180,9 @@ export function useVendorProducts(vendorId?: string) {
 
       if (dbErr) throw dbErr;
 
-      setProducts((data || []).map(mapProduct));
+      const mapped = (data || []).map(mapProduct);
+      setProducts(mapped);
+      localStorage.setItem(cacheKey, JSON.stringify(mapped));
       setError(null);
     } catch (err) {
       console.error('useVendorProducts error:', err);

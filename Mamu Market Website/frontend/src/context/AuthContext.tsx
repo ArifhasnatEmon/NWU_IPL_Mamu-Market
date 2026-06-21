@@ -131,6 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (cachedUser?.id) {
           userRef.current = cachedUser;
           setUserState(cachedUser);
+          setLoading(false); // Instantly unlock the UI using cached data
         }
       }
     } catch {}

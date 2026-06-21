@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Product } from '../../types';
 import FlashSaleSection from './FlashSaleSection';
+import SponsoredPicksSection from './SponsoredPicksSection';
 import ProductCard from '../../components/product/ProductCard';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -135,8 +136,6 @@ const HomeView: React.FC = () => {
         </section>
       )}
 
-
-
       {/* Categories */}
       <section className="container mx-auto px-4">
         <div className="flex items-center justify-between mb-6">
@@ -165,6 +164,9 @@ const HomeView: React.FC = () => {
 
       {/* Flash Sale */}
       <FlashSaleSection />
+
+      {/* Sponsored Picks */}
+      <SponsoredPicksSection />
 
       {/* Featured Products */}
       <section className="container mx-auto px-4">

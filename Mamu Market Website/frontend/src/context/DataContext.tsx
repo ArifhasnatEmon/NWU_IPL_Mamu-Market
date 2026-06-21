@@ -3,6 +3,7 @@ import { Product, Vendor, Category } from '../types';
 import { useApprovedProducts } from '../hooks/useProducts';
 import { useVendors as useVendorsHook } from '../hooks/useVendors';
 import { useCategories as useCategoriesHook } from '../hooks/useSecondary';
+import { useGlobalSettings } from '../hooks/useMarketing';
 
 interface DataContextValue {
   approvedProducts: Product[];
@@ -17,6 +18,7 @@ interface DataContextValue {
   removeCategory: (id: string) => Promise<boolean>;
   addSubCategory: (parentId: string, name: string) => Promise<boolean>;
   removeSubCategory: (id: string) => Promise<boolean>;
+  sponsoredProductIds: string[];
 }
 
 const DataContext = createContext<DataContextValue | undefined>(undefined);
@@ -34,6 +36,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     removeSubCategory,
   } = useCategoriesHook();
 
+  const { setting: sponsoredPinned } = useGlobalSettings('sponsored_products');
+  
+  const sponsoredProductIds = React.useMemo(() => {
+    if (!sponsoredPinned) return [];
+    const now = Date.now();
+    return sponsoredPinned
+      .filter((x: any) => typeof x === 'string' || !x.expiresAt || new Date(x.expiresAt).getTime() > now)
+      .map((x: any) => typeof x === 'string' ? x : x.id);
+  }, [sponsoredPinned]);
+
   return (
     <DataContext.Provider value={{
       approvedProducts,
@@ -48,6 +60,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       removeCategory,
       addSubCategory,
       removeSubCategory,
+      sponsoredProductIds,
     }}>
       {children}
     </DataContext.Provider>
@@ -81,4 +94,11 @@ export const useSharedCategories = () => {
     addSubCategory: ctx.addSubCategory,
     removeSubCategory: ctx.removeSubCategory,
   };
+};
+
+/** Shared sponsored products check to avoid websocket exhaustion in ProductCard */
+export const useSharedSponsoredProducts = () => {
+  const ctx = useContext(DataContext);
+  if (!ctx) throw new Error('useSharedSponsoredProducts must be used within DataProvider');
+  return { sponsoredProductIds: ctx.sponsoredProductIds };
 };

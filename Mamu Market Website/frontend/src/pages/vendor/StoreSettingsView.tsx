@@ -382,7 +382,7 @@ const StoreSettingsView: React.FC = () => {
 
       {/* Category Request Modal */}
       {cityModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCityModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-500 mb-6">
               <i className="fas fa-map-marker-alt text-xl"></i>
@@ -426,7 +426,7 @@ const StoreSettingsView: React.FC = () => {
       )}
 
       {categoryModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setCategoryModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-10 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-2xl font-black text-gray-900 mb-6">Request Category</h3>
             <div className="space-y-4">
@@ -503,7 +503,7 @@ const StoreSettingsView: React.FC = () => {
       )}
 
       {removeModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setRemoveModal(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center text-red-500 mb-6">
               <i className="fas fa-tag text-xl"></i>

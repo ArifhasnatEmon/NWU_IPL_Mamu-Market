@@ -79,7 +79,7 @@ const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={onCancel}>
+    <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4">
       <div 
         className="bg-white rounded-[2rem] p-6 sm:p-8 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]" 
         onClick={e => e.stopPropagation()}

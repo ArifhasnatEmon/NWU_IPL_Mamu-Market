@@ -63,22 +63,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const [tickerMessages, setTickerMessages] = useState<string[]>([]);
+  const [tickerMessages, setTickerMessages] = useState<{text: string, isSponsored?: boolean}[]>([]);
   useEffect(() => {
     if (tickerSettings && Array.isArray(tickerSettings.messages)) {
       // Handle both old string[] and new {text, expiresAt}[] formats
       const activeMessages = tickerSettings.messages
-        .map((m: any) => typeof m === 'string' ? { text: m, expiresAt: null } : m)
+        .map((m: any) => typeof m === 'string' ? { text: m, expiresAt: null, isSponsored: false } : m)
         .filter((m: any) => !isExpired(m.expiresAt))
-        .map((m: any) => m.text);
+        .map((m: any) => ({ text: m.text, isSponsored: m.isSponsored }));
       setTickerMessages(activeMessages.length > 0 ? activeMessages : [
-        '🎉 Welcome to Mamu Market!',
-        '🚚 Free shipping on orders over ৳10000'
+        { text: '🎉 Welcome to Mamu Market!', isSponsored: false },
+        { text: '🚚 Free shipping on orders over ৳10000', isSponsored: false }
       ]);
     } else {
       setTickerMessages([
-        '🎉 Welcome to Mamu Market!',
-        '🚚 Free shipping on orders over ৳10000'
+        { text: '🎉 Welcome to Mamu Market!', isSponsored: false },
+        { text: '🚚 Free shipping on orders over ৳10000', isSponsored: false }
       ]);
     }
   }, [tickerSettings]);
@@ -281,8 +281,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.4 }}
+                      className="flex items-center gap-2"
                     >
-                      {tickerMessages[messageIndex]}
+                      {tickerMessages[messageIndex]?.isSponsored && (
+                        <span className="bg-amber-400 text-gray-900 px-2 py-0.5 rounded-md font-black text-[9px] uppercase tracking-widest shadow-sm">
+                          <i className="fas fa-star text-[8px] mr-1"></i> Promoted
+                        </span>
+                      )}
+                      <span>{tickerMessages[messageIndex]?.text}</span>
                     </motion.span>
                   );
                 })()}
