@@ -12,7 +12,7 @@ test.describe('Checkout Flow', () => {
     const productName = productCard.locator('h3');
     await expect(productName).toBeVisible();
     const text = await productName.textContent();
-    expect(text?.trim().length).toBeGreaterThan(0);
+    expect(text?.trim().length || 0).toBeGreaterThan(0);
   });
 
   test('should show Add to Cart on the product details page', async ({ page }) => {

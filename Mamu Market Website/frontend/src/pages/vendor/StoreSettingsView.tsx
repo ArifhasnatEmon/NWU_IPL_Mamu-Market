@@ -64,8 +64,8 @@ const StoreSettingsView: React.FC = () => {
     if (!latestAdd) return true; // removed and never re-added
     return new Date(latestRemoval.created_at).getTime() > new Date(latestAdd.created_at).getTime();
   };
-  const vendorCategories = [...new Set([...vendorCats, ...approvedCategoryRequests])]
-    .filter(Boolean)
+  const vendorCategories = ([...new Set([...vendorCats, ...approvedCategoryRequests])]
+    .filter(Boolean) as string[])
     .filter(cat => !isEffectivelyRemoved(cat));
 
   // Helper: check if a pending request of a given type already exists (prevents duplicate submissions)

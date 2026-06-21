@@ -42,7 +42,7 @@ const VendorOrdersView: React.FC = () => {
   const { orders: allOrders, refreshOrders } = useOrders(user);
   const STATUS_STEPS = ['Processing', 'Shipped', 'Delivered'];
 
-  const vendorId = user?.id;
+  const vendorId = user?.id || '';
   const vendorOrders = allOrders.filter((order: Order) =>
     order.items?.some((item: OrderItem) => item.vendorId === vendorId)
   );

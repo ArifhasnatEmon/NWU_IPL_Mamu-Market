@@ -51,8 +51,8 @@ const CartView: React.FC = () => {
   // Product discount
   const productDiscount = appliedPromo && appliedPromo.appliesTo !== 'delivery'
     ? appliedPromo.discountType === '%'
-      ? Math.round(applicableSubtotal * (appliedPromo.discount / 100))
-      : Math.min(appliedPromo.discount, applicableSubtotal)
+      ? Math.round(applicableSubtotal * ((appliedPromo.discount || 0) / 100))
+      : Math.min(appliedPromo.discount || 0, applicableSubtotal)
     : 0;
 
   // Delivery discount

@@ -93,7 +93,7 @@ const ProductDetailsView: React.FC<{
         price: Number(p.price) || 0,
         originalPrice: Number(p.originalPrice) || Number(p.price) || 0,
         image: p.mainImage || p.image || '',
-        images: [p.mainImage, p.extraImage1, p.extraImage2, p.extraImage3].filter(Boolean),
+        images: [p.mainImage, p.extraImage1, p.extraImage2, p.extraImage3].filter(Boolean) as string[],
         categoryId: p.category?.toLowerCase().replace(/\s+/g, '-') || 'general',
         category: p.category || 'General',
         subcategory: p.subcategory || '',
@@ -369,7 +369,7 @@ const ProductDetailsView: React.FC<{
               {user?.role === 'customer' && (
                 <button onClick={async () => {
                   if (productReported) return;
-                  const existingReports = null;
+                  const existingReports: any[] | null = null;
                   if (existingReports && existingReports.length > 0) { setProductReported(true); return; }
                   setProductReportReason('');
                   setProductReportModal(true);
@@ -797,7 +797,7 @@ const ProductDetailsView: React.FC<{
         <section className="mb-16">
           <h2 className="text-2xl font-black text-gray-900 tracking-tight mb-8">Recently Viewed</h2>
           <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-            {recentlyViewed.filter(p => p.id !== product.id).slice(0, 6).map((p: Product) => (
+            {recentlyViewed.filter(p => p.id !== product.id).slice(0, 6).map((p: any) => (
               <div
                 key={p.id}
                 onClick={() => handleSelectProduct(p)}

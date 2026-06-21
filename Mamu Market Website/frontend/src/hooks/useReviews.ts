@@ -31,7 +31,7 @@ export function useReviews(filters?: ReviewFilters) {
       const { data, error: dbErr } = await query;
       if (dbErr) throw dbErr;
 
-      let mapped = (data || []).map(mapReview);
+      let mapped = (data || []).map(r => mapReview(r as any));
 
 
       if (filters?.vendorId && !filters?.productId) {
@@ -45,7 +45,7 @@ export function useReviews(filters?: ReviewFilters) {
       }
 
       // Enrich reviews with latest user profiles (name & avatar)
-      const uniqueUserIds = [...new Set(mapped.map(r => r.userId).filter(Boolean))];
+      const uniqueUserIds = Array.from(new Set(mapped.map(r => r.userId).filter(Boolean)));
       if (uniqueUserIds.length > 0) {
         const { data: profiles } = await supabase
           .from('profiles')
@@ -59,8 +59,8 @@ export function useReviews(filters?: ReviewFilters) {
             if (profile) {
               return {
                 ...r,
-                userName: profile.name || r.userName,
-                userAvatar: profile.avatar || r.userAvatar,
+                userName: (profile as any).name || r.userName || '',
+                userAvatar: (profile as any).avatar || r.userAvatar || '',
               };
             }
             return r;
@@ -94,7 +94,7 @@ export function useReviews(filters?: ReviewFilters) {
 
   useRealtimeSubscription({
     table: 'reviews',
-    events: ['INSERT', 'UPDATE', 'DELETE'],
+    events: ['INSERT', 'UPDATE', 'DELETE'] as ('INSERT' | 'UPDATE' | 'DELETE')[],
     filter: rtFilter,
     channelName: `rt-reviews-${filters?.productId || filters?.vendorId || 'all'}`,
     onEvent: handleEvent,

@@ -71,7 +71,7 @@ const OrderHistoryView: React.FC = () => {
   const totalOrders = orders.length;
   const totalSpent = orders.filter(o => o.status !== 'Cancelled').reduce((sum, o) => sum + o.total, 0);
   const lastOrderDate = orders.length > 0
-    ? new Date(orders[0].createdAt || orders[0].date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    ? new Date(orders[0].createdAt || orders[0].date || '').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
     : '—';
   const deliveredCount = orders.filter(o => normalizeStatus(o.status) === 'Delivered').length;
 

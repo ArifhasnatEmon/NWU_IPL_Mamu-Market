@@ -80,6 +80,6 @@ export interface ProductFormData {
   color4name: string; color4image: string; color4hex: string;
   dealType: 'none' | 'flash' | 'weekly' | 'monthly';
   stockStatus: 'in_stock' | 'out_of_stock' | 'discontinued';
-  [key: string]: string;
+  [key: string]: string | undefined;
 }
 

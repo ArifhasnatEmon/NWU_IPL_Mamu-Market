@@ -82,7 +82,7 @@ const DashboardView: React.FC = () => {
     .filter(r => r.request_type === 'category_add' && r.status === 'approved')
     .map(r => r.requested_value);
   // Only exclude a category if its most recent approved removal is NEWER than its most recent approved add
-  const isEffectivelyRemoved = (catName) => {
+  const isEffectivelyRemoved = (catName: string | undefined) => {
     const catLower = (catName || '').toLowerCase();
     const latestRemoval = requests
       .filter(r => r.request_type === 'category_remove' && r.status === 'approved' && (r.current_value || '').toLowerCase() === catLower)
@@ -97,7 +97,7 @@ const DashboardView: React.FC = () => {
   const vendorCategories = (storeCategory
     ? [...new Set([...storeCategory.split(',').map((c: string) => c.trim()), ...approvedCategoryRequests])].filter(Boolean)
     : approvedCategoryRequests.length > 0 ? approvedCategoryRequests : []
-  ).filter(cat => !isEffectivelyRemoved(cat));
+  ).filter(cat => cat && !isEffectivelyRemoved(cat)) as string[];
 
   const [form, setForm] = useState({
     productName: '', category: vendorCategories.length >= 1 ? vendorCategories[0] : '', subCategory: '', price: '', originalPrice: '',
@@ -219,7 +219,7 @@ const DashboardView: React.FC = () => {
         };
 
         ['productName', 'price', 'originalPrice', 'units', 'description', 'shortDescription', 'shippingReturnPolicy', 'mainImage'].forEach(field => {
-          const oldVal = String(editingProduct[field] ?? '');
+          const oldVal = String(editingProduct[field as keyof Product] ?? '');
           const newVal = String((form as any)[field] ?? '');
           if (oldVal !== newVal) {
             hasOtherChanges = true;
@@ -250,7 +250,7 @@ const DashboardView: React.FC = () => {
           'mainImage': 'main_image'
         };
         ['productName', 'price', 'originalPrice', 'units', 'description', 'shortDescription', 'shippingReturnPolicy', 'mainImage'].forEach(field => {
-          if ((form as any)[field] !== editingProduct[field]) {
+          if ((form as any)[field] !== editingProduct[field as keyof Product]) {
             changes[fieldMapping[field]] = (form as any)[field];
           }
         });
@@ -294,9 +294,10 @@ const DashboardView: React.FC = () => {
     if (!finalReason) { setToast('Please provide a reason'); return; }
     // Submit Deletion Request
     // Check if already requested
-    const alreadyRequested = requests.some(r => r.request_type === 'product_remove' && r.current_value === deleteTarget.id && r.status !== 'rejected');
+    const alreadyRequested = requests.some(r => r.request_type === 'product_remove' && r.current_value === deleteTarget?.id && r.status !== 'rejected');
     if (alreadyRequested) { setToast('Removal request already submitted!'); setDeleteModal(false); return; }
 
+    if (!deleteTarget) return;
     await submitRequest('product_remove', deleteTarget.id, deleteTarget.productName || deleteTarget.name, finalReason);
     setDeleteModal(false);
     setDeleteTarget(null);
@@ -661,7 +662,7 @@ const DashboardView: React.FC = () => {
                     <option value="">Select Sub-category</option>
                     {form.category && (() => {
 
-                      const customMatch = customCategories.find((c: Category) => c.name.toLowerCase() === form.category.toLowerCase());
+                      const customMatch = customCategories.find((c: Category) => c.name.toLowerCase() === form.category?.toLowerCase());
                       const customSubs = (customMatch?.subcategories || []).map((s: { name: string }) => s.name);
                       const allSubs = [...new Set([...customSubs])];
                       if (allSubs.length === 0) allSubs.push('General');

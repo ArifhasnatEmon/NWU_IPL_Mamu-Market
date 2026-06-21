@@ -40,6 +40,7 @@ const VendorStoreView: React.FC = () => {
 
   if (!vendor && !vendorsLoading) return <Navigate to="/vendors" replace />;
   if (vendorsLoading) return <div className="flex h-screen items-center justify-center"><div className="w-16 h-16 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
+  if (!vendor) return null;
 
   const vendorFromStorage = fetchedVendors.find(u => u.id === vendor?.id);
   const vendorData = { ...vendor, ...vendorFromStorage };
@@ -288,7 +289,7 @@ const VendorStoreView: React.FC = () => {
                   setTimeout(() => navigate('/messages'), 500);
                 } catch (err) {
                   console.error(err);
-                  setToast('Error: ' + (err.message || 'Failed to send message.'));
+                  setToast('Error: ' + ((err as Error).message || 'Failed to send message.'));
                 }
               }} className="flex-1 py-4 bg-brand-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-brand-800 transition-all">Send Message</button>
             </div>

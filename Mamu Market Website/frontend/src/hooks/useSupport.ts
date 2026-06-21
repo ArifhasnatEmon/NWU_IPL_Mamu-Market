@@ -61,7 +61,7 @@ export const useSupportTickets = () => {
 
   useRealtimeSubscription({
     table: 'support_tickets',
-    events: ['INSERT', 'UPDATE'],
+    events: ['INSERT', 'UPDATE'] as ('INSERT' | 'UPDATE' | 'DELETE')[],
     filter: rtTicketFilter,
     enabled: !!user,
     channelName: `rt-support-tickets-${user?.id}-${user?.role}-${instanceId}`,
@@ -288,7 +288,7 @@ export const useMessages = () => {
 
   useRealtimeSubscription({
     table: 'messages',
-    events: ['INSERT', 'UPDATE'],
+    events: ['INSERT', 'UPDATE'] as ('INSERT' | 'UPDATE' | 'DELETE')[],
 
     enabled: !!user?.id,
     channelName: `rt-messages-${user?.id}-${instanceId}`,

@@ -11,7 +11,7 @@ import { supabase } from '../../lib/supabase';
 interface ImageUploadBoxProps {
   field: string;
   label: string;
-  inputRef: React.RefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement | null>;
   form: Record<string, string>;
   handleImageChange: (field: string, file: File | null) => void;
 }

@@ -416,7 +416,7 @@ const LoginView: React.FC<{ initialVendorMode?: boolean }> = ({ initialVendorMod
             const res = await login(emailVal, passwordVal, roleVal);
             if (res.success && res.user) {
               setToast(`Welcome back, ${res.user.name}!`);
-              setTimeout(() => navigate(res.user.role === 'admin' ? '/admin-dashboard' : res.user.role === 'vendor' ? '/dashboard' : '/'), 100);
+              setTimeout(() => navigate(res.user?.role === 'admin' ? '/admin-dashboard' : res.user?.role === 'vendor' ? '/dashboard' : '/'), 100);
             } else {
               setToast(res.error || 'Login failed');
             }

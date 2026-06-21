@@ -28,7 +28,7 @@ export function mapProduct(row: Partial<Database['public']['Tables']['products']
   }
 
   return {
-    id: row.id,
+    id: row.id || '',
     name: row.name || '',
     productName: row.name || '',
     price,
@@ -44,10 +44,10 @@ export function mapProduct(row: Partial<Database['public']['Tables']['products']
     vendor: row.vendor_name || row.vendor || 'Unknown Vendor',
     vendorId: row.vendor_id || '',
     vendorName: row.vendor_name || '',
-    isNew,
+    isNew: isNew ?? false,
     isSale: row.is_sale ?? false,
     dealType: (row.deal_type as Product['dealType']) || 'none',
-    inStock,
+    inStock: inStock ?? false,
     stockStatus: (row.stock_status as Product['stockStatus']) || (inStock ? 'in_stock' : 'out_of_stock'),
     description: row.description || '',
     colors: (row.colors as unknown as any[]) || [],
@@ -70,7 +70,7 @@ export function mapProduct(row: Partial<Database['public']['Tables']['products']
 
 export function mapOrder(row: Partial<Database['public']['Tables']['orders']['Row']> & Record<string, any>): Order {
   return {
-    id: row.id,
+    id: row.id || '',
     parentOrderId: row.parent_order_id || '',
     vendorId: row.vendor_id || '',
     userId: row.user_id || '',

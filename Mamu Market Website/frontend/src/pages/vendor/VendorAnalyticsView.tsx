@@ -68,7 +68,7 @@ const VendorAnalyticsView: React.FC = () => {
       const label = monthNames[d.getMonth()];
       const monthSales = activeVendorOrders
         .filter((o: Order) => {
-          const od = new Date(o.createdAt || o.date);
+          const od = new Date(o.createdAt || o.date || '');
           return od.getFullYear() === d.getFullYear() && od.getMonth() === d.getMonth();
         })
         .reduce((s: number, o: Order) => s + o.items
@@ -127,7 +127,7 @@ const VendorAnalyticsView: React.FC = () => {
                 <XAxis dataKey="month" tick={{ fontSize: 11, fontWeight: 700, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fontWeight: 700, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={(v) => `৳${(v/1000).toFixed(0)}k`} />
                 <Tooltip
-                  formatter={(value: number) => [`৳${value.toLocaleString()}`, 'Sales']}
+                  formatter={(value: any) => [`৳${Number(value).toLocaleString()}`, 'Sales']}
                   contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', fontWeight: 700, fontSize: 12 }}
                   cursor={{ fill: '#f3f0ff' }}
                 />

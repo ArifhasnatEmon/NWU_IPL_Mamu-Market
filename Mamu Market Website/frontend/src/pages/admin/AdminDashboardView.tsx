@@ -230,9 +230,9 @@ const AdminDashboardView: React.FC = () => {
         const vendorName = vProfile?.name || 'Vendor';
 
         if (approve) {
-          if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName, 'Approved').catch(console.error);
+          if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName || '', 'Approved').catch(console.error);
         } else {
-          if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName, 'Rejected', reason).catch(console.error);
+          if (vendorEmail) emailTemplates.productStatusUpdate(vendorEmail, vendorName, product.productName || '', 'Rejected', reason).catch(console.error);
         }
       }
       refreshData();

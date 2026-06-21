@@ -124,7 +124,7 @@ const HomeView: React.FC = () => {
             </AnimatePresence>
             
             <div className="absolute bottom-8 sm:bottom-12 left-1/2 -translate-x-1/2 sm:left-auto sm:right-12 sm:translate-x-0 z-20 flex gap-2 sm:gap-3">
-              {slides.map((_, i) => (
+              {slides.map((_: any, i: number) => (
                 <button 
                   key={i} 
                   onClick={() => setSlide(i)} 
@@ -283,7 +283,7 @@ const HomeView: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-6 overflow-x-auto pb-4" style={{ scrollbarWidth: 'none' }}>
-            {recentlyViewed.map((product: Product) => (
+            {recentlyViewed.map((product: any) => (
               <div key={product.id} className="flex-shrink-0 w-56 cursor-pointer group" onClick={() => handleSelectProduct(product)}>
                 <div className="w-56 h-56 rounded-2xl overflow-hidden bg-gray-100 mb-3">
                   {product.image && <img src={product.image} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" alt={product.name} />}
