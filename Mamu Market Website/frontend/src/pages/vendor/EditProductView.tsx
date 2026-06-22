@@ -1,13 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { uploadImage, uploadImages } from '../../utils/imageUpload';
-import { useSharedCategories } from '../../context/DataContext';
+import { useSharedCategories, useSharedProducts } from '../../context/DataContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import ImageCropperModal from '../../components/ui/ImageCropperModal';
-import { Category } from '../../types';
+import { Category, Product } from '../../types';
 import { supabase } from '../../lib/supabase';
 
 const STEPS = [
@@ -19,13 +19,14 @@ const STEPS = [
   { id: 'deal', label: 'Deal Section', icon: 'fa-bolt' },
 ];
 
-const AddProductView: React.FC = () => {
+const EditProductView: React.FC = () => {
   const { user } = useAuth();
   const { setToast } = useApp();
   const navigate = useNavigate();
-  const { step } = useParams<{ step?: string }>();
+  const { step, productId } = useParams<{ step?: string, productId: string }>();
   const { categories: customCategories } = useSharedCategories();
   const { requests } = useVendorRequests();
+  const { products } = useSharedProducts();
 
   const currentStepId = step || 'basic-info';
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStepId) !== -1 ? STEPS.findIndex(s => s.id === currentStepId) : 0;
@@ -35,7 +36,8 @@ const AddProductView: React.FC = () => {
     .filter(r => r.request_type === 'category_add' && r.status === 'approved')
     .map(r => r.requested_value)
     .filter(Boolean) as string[];
-  const vendorCategories: string[] = React.useMemo(() => {
+
+  const vendorCategories: string[] = useMemo(() => {
     const isEffectivelyRemoved = (catName: string) => {
       const catLower = (catName || '').toLowerCase();
       const latestRemoval = requests
@@ -55,13 +57,17 @@ const AddProductView: React.FC = () => {
     ).filter(cat => !isEffectivelyRemoved(cat));
   }, [storeCategory, approvedCategoryRequests, requests]);
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialFormState, setInitialFormState] = useState<any>({});
+  
   const [form, setForm] = useState({
     productName: '',
-    category: vendorCategories[0] || '',
+    category: '',
     subCategory: '',
     price: '',
     originalPrice: '',
     units: '',
+    stockStatus: 'in_stock',
     description: '',
     shortDescription: '',
     warranty: '',
@@ -78,8 +84,67 @@ const AddProductView: React.FC = () => {
     color4name: '', color4image: '', color4hex: '#000000',
     dealType: 'none' as 'none' | 'flash' | 'weekly' | 'monthly',
   });
-  const latestFormRef = React.useRef<any>({});
-  React.useEffect(() => { latestFormRef.current = form; }, [form]);
+
+  useEffect(() => {
+    if (!productId || products.length === 0) return;
+    const p = products.find(prod => prod.id.toString() === productId);
+    if (!p) {
+      setToast('Product not found');
+      navigate('/dashboard/inventory');
+      return;
+    }
+
+    const parsePolicy = (policy: string | null) => {
+      if (!policy) return { warranty: '', guarantee: '', returnPolicy: '', shippingTime: '' };
+      const lines = policy.split('\n');
+      const getVal = (prefix: string) => {
+        const line = lines.find(l => l.startsWith(prefix));
+        if (!line) return '';
+        const val = line.replace(prefix, '').trim();
+        return val === 'No Warranty' || val === 'No Guarantee' || val === 'No Returns' || val === 'Standard Delivery' ? '' : val;
+      };
+      return {
+        warranty: getVal('Product Warranty: '),
+        guarantee: getVal('Product Guarantee: '),
+        returnPolicy: getVal('Return Policy: '),
+        shippingTime: getVal('Estimated Delivery: '),
+      };
+    };
+
+    const policies = parsePolicy(p.shippingReturnPolicy || (p as any).shipping_return_policy);
+    
+    const initialState = {
+      productName: p.name || '',
+      category: p.category || vendorCategories[0] || '',
+      subCategory: p.subcategory || '',
+      price: p.price?.toString() || '',
+      originalPrice: p.originalPrice?.toString() || '',
+      units: p.units?.toString() || '',
+      stockStatus: p.stockStatus || 'in_stock',
+      description: p.description || '',
+      shortDescription: p.shortDescription || (p as any).short_description || '',
+      warranty: policies.warranty,
+      guarantee: policies.guarantee,
+      returnPolicy: policies.returnPolicy,
+      shippingTime: policies.shippingTime,
+      mainImage: p.image || '',
+      extraImage1: p.images?.[0] || '',
+      extraImage2: p.images?.[1] || '',
+      extraImage3: p.images?.[2] || '',
+      color1name: p.colors?.[0]?.name || '', color1image: p.colors?.[0]?.image || '', color1hex: p.colors?.[0]?.value || '#000000',
+      color2name: p.colors?.[1]?.name || '', color2image: p.colors?.[1]?.image || '', color2hex: p.colors?.[1]?.value || '#000000',
+      color3name: p.colors?.[2]?.name || '', color3image: p.colors?.[2]?.image || '', color3hex: p.colors?.[2]?.value || '#000000',
+      color4name: p.colors?.[3]?.name || '', color4image: p.colors?.[3]?.image || '', color4hex: p.colors?.[3]?.value || '#000000',
+      dealType: (p.dealType as 'none' | 'flash' | 'weekly' | 'monthly') || 'none',
+    };
+
+    setForm(initialState);
+    setInitialFormState(initialState);
+    setIsLoading(false);
+  }, [productId, products]);
+
+  const latestFormRef = useRef<any>({});
+  useEffect(() => { latestFormRef.current = form; }, [form]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentField, setCurrentField] = useState('');
@@ -152,14 +217,14 @@ const AddProductView: React.FC = () => {
       return;
     }
     if (currentStepIndex < STEPS.length - 1) {
-      navigate(`/dashboard/add-product/${STEPS[currentStepIndex + 1].id}`);
+      navigate(`/dashboard/edit-product/${productId}/${STEPS[currentStepIndex + 1].id}`);
       window.scrollTo(0,0);
     }
   };
 
   const handlePrev = () => {
     if (currentStepIndex > 0) {
-      navigate(`/dashboard/add-product/${STEPS[currentStepIndex - 1].id}`);
+      navigate(`/dashboard/edit-product/${productId}/${STEPS[currentStepIndex - 1].id}`);
       window.scrollTo(0,0);
     }
   };
@@ -170,13 +235,11 @@ const AddProductView: React.FC = () => {
       const error = validateStep(i);
       if (error) {
         setToast(`Error in ${STEPS[i].label}: ${error}`, 'error');
-        navigate(`/dashboard/add-product/${STEPS[i].id}`);
+        navigate(`/dashboard/edit-product/${productId}/${STEPS[i].id}`);
         return;
       }
     }
 
-    const priceNum = Number(form.price);
-    const unitsNum = Number(form.units);
     const latestForm = { ...form, ...latestFormRef.current };
     const colors = [];
     for (let n = 1; n <= 4; n++) {
@@ -200,39 +263,88 @@ const AddProductView: React.FC = () => {
         }
       }
 
-      setToast('Saving product data...');
+      setToast('Saving product changes...');
 
-      const newProduct = {
-        vendor_id: user?.id,
-        vendor: user?.name || user?.storeName || user?.email?.split('@')[0] || 'Vendor',
+      const changes = {
         name: latestForm.productName,
-        category: latestForm.category,
-        subcategory: latestForm.subCategory,
-        price: priceNum,
-        original_price: Number(latestForm.originalPrice) || priceNum,
-        image: mainImageUrl || 'https://via.placeholder.com/400',
-        images: extraImageUrls.filter(Boolean),
-        units: unitsNum,
-        stock: unitsNum,
+        price: Number(latestForm.price),
+        original_price: Number(latestForm.originalPrice) || Number(latestForm.price),
+        units: Number(latestForm.units),
+        stock: Number(latestForm.units),
+        stock_status: latestForm.stockStatus,
+        deal_type: latestForm.dealType,
         description: latestForm.description,
         short_description: latestForm.shortDescription,
         shipping_return_policy: `Product Warranty: ${latestForm.warranty || 'No Warranty'}\nProduct Guarantee: ${latestForm.guarantee || 'No Guarantee'}\nReturn Policy: ${latestForm.returnPolicy || 'No Returns'}\nEstimated Delivery: ${latestForm.shippingTime || 'Standard Delivery'}`,
+        image: mainImageUrl || 'https://via.placeholder.com/400',
+        main_image: mainImageUrl || 'https://via.placeholder.com/400',
+        images: extraImageUrls.filter(Boolean),
+        extra_image_1: extraImageUrls[0] || null,
+        extra_image_2: extraImageUrls[1] || null,
+        extra_image_3: extraImageUrls[2] || null,
         colors: colors,
-        deal_type: latestForm.dealType,
-        status: 'pending',
-        created_at: new Date().toISOString()
       };
 
-      const { error: dbErr } = await supabase.from('products').insert([newProduct]);
-      
-      if (dbErr) throw dbErr;
+      // 1. Instant update to products table
+      const instantChangesDb = {
+        units: Number(latestForm.units),
+        stock: Number(latestForm.units),
+        stock_status: latestForm.stockStatus,
+        deal_type: latestForm.dealType,
+      };
 
-      setToast('Product submitted successfully for admin approval!');
-      navigate('/dashboard');
+      const { error: instantError } = await supabase
+        .from('products')
+        .update(instantChangesDb)
+        .eq('id', productId);
+      
+      if (instantError) throw instantError;
+
+      // 2. Check if there are approval changes
+      let hasApprovalChanges = false;
+      const approvalFields = Object.keys(latestForm).filter(k => !['units', 'stockStatus', 'dealType'].includes(k));
+      for (const key of approvalFields) {
+        if (latestForm[key] !== initialFormState[key]) {
+          hasApprovalChanges = true;
+          break;
+        }
+      }
+
+      if (hasApprovalChanges) {
+        const { data: existingPending } = await supabase
+          .from('product_updates')
+          .select('id')
+          .eq('product_id', productId)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+        if (existingPending) {
+          const { error: updateApprovalErr } = await supabase
+            .from('product_updates')
+            .update({ changes })
+            .eq('id', existingPending.id);
+          if (updateApprovalErr) throw updateApprovalErr;
+        } else {
+          const { error: insertApprovalErr } = await supabase
+            .from('product_updates')
+            .insert({
+              product_id: productId,
+              vendor_id: user?.id,
+              changes: changes,
+              status: 'pending'
+            });
+          if (insertApprovalErr) throw insertApprovalErr;
+        }
+        setToast('Instant changes saved. Other updates submitted for admin approval!');
+      } else {
+        setToast('Changes saved successfully!');
+      }
+
+      navigate('/dashboard/inventory');
       
     } catch(err: unknown) {
       console.error(err);
-      setToast((err as Error).message || 'Error submitting product', 'error');
+      setToast((err as Error).message || 'Error updating product', 'error');
     } finally {
       setIsUploading(false);
     }
@@ -240,28 +352,37 @@ const AddProductView: React.FC = () => {
 
   const inputClass = "w-full bg-white border-2 border-gray-100 rounded-2xl px-5 py-3.5 font-bold outline-none focus:border-brand-400 transition-all text-gray-900";
   const labelClass = "text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block";
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <i className="fas fa-spinner fa-spin text-3xl text-brand-500"></i>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <PageTitle title="Add Product" />
+      <PageTitle title="Edit Product" />
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all">
+            <button onClick={() => navigate('/dashboard/inventory')} className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all">
               <i className="fas fa-arrow-left text-gray-600 text-sm"></i>
             </button>
             <div>
-              <h1 className="text-xl font-black text-gray-900">Add New Product</h1>
+              <h1 className="text-xl font-black text-gray-900">Edit Product</h1>
               <p className="text-xs text-gray-400 font-medium">Step {currentStepIndex + 1} of {STEPS.length}</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <button disabled={isUploading} onClick={() => navigate('/dashboard')} className="px-6 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-black text-sm hover:bg-gray-200 transition-all disabled:opacity-50">
+            <button disabled={isUploading} onClick={() => navigate('/dashboard/inventory')} className="px-6 py-2.5 rounded-xl bg-gray-100 text-gray-600 font-black text-sm hover:bg-gray-200 transition-all disabled:opacity-50">
               Cancel
             </button>
             {currentStepIndex === STEPS.length - 1 && (
               <button disabled={isUploading} onClick={handleSubmit} className="px-6 py-2.5 rounded-xl gradient-primary text-white font-black text-sm shadow-lg shadow-brand-500/20 hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2">
-                {isUploading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>} Submit
+                {isUploading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>} Save Changes
               </button>
             )}
           </div>
@@ -275,11 +396,11 @@ const AddProductView: React.FC = () => {
             <div key={s.id} className="flex items-center flex-1 last:flex-none">
               <button 
                 onClick={() => {
-                  if (idx < currentStepIndex) navigate(`/dashboard/add-product/${s.id}`);
+                  if (idx < currentStepIndex) navigate(`/dashboard/edit-product/${productId}/${s.id}`);
                   else if (idx === currentStepIndex + 1) {
                     const error = validateStep(currentStepIndex);
                     if (error) setToast(`You must complete "${STEPS[currentStepIndex].label}" first: ${error}`, 'error');
-                    else navigate(`/dashboard/add-product/${s.id}`);
+                    else navigate(`/dashboard/edit-product/${productId}/${s.id}`);
                   }
                 }}
                 className={`flex flex-col items-center gap-1 w-16 ${idx <= currentStepIndex ? 'text-brand-600' : 'text-gray-300'}`}
@@ -500,7 +621,7 @@ const AddProductView: React.FC = () => {
                   <i className="fas fa-clock text-amber-500 mt-0.5"></i>
                   <div>
                     <p className="font-black text-amber-800 text-sm">Pending Admin Review</p>
-                    <p className="text-amber-700 text-xs font-medium mt-0.5">Your product will be reviewed before going live. You'll see it in "Pending" status on your dashboard.</p>
+                    <p className="text-amber-700 text-xs font-medium mt-0.5">Some updates (like name or images) require admin approval and will go to 'Pending' status. Stock and pricing update instantly.</p>
                   </div>
                 </div>
               </div>
@@ -530,7 +651,7 @@ const AddProductView: React.FC = () => {
                 disabled={isUploading} 
                 className="px-8 py-3 rounded-xl gradient-primary text-white font-black text-sm shadow-lg shadow-brand-500/20 hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
               >
-                {isUploading ? <><i className="fas fa-spinner fa-spin"></i> Submitting...</> : <><i className="fas fa-paper-plane"></i> Submit for Admin Approval</>}
+                {isUploading ? <><i className="fas fa-spinner fa-spin"></i> Saving...</> : <><i className="fas fa-save"></i> Save Changes</>}
               </button>
             )}
           </div>
@@ -556,4 +677,4 @@ const AddProductView: React.FC = () => {
   );
 };
 
-export default AddProductView;
+export default EditProductView;

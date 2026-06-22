@@ -63,6 +63,7 @@ import VendorReviewsView from '../pages/vendor/VendorReviewsView';
 import VendorInventoryView from '../pages/vendor/VendorInventoryView';
 import VendorAnalyticsView from '../pages/vendor/VendorAnalyticsView';
 import AddProductView from '../pages/vendor/AddProductView';
+import EditProductView from '../pages/vendor/EditProductView';
 import VendorOrdersView from '../pages/vendor/VendorOrdersView';
 import VendorPromoCodesView from '../pages/vendor/VendorPromoCodesView';
 import StoreSettingsView from '../pages/vendor/StoreSettingsView';
@@ -160,7 +161,7 @@ const AppRoutes: React.FC = () => {
 
   const { user } = useAuth();
   const { cart, isCartOpen, setIsCartOpen, removeFromCart, updateCartQuantity } = useCart();
-  const { toast, setToast } = useApp();
+  const { toast, toastType, setToast } = useApp();
 
   return (
     <>
@@ -209,7 +210,8 @@ const AppRoutes: React.FC = () => {
             <Route path="/dashboard/reviews" element={<ProtectedVendorRoute><VendorReviewsView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/inventory" element={<ProtectedVendorRoute><VendorInventoryView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/analytics" element={<ProtectedVendorRoute><VendorAnalyticsView /></ProtectedVendorRoute>} />
-            <Route path="/dashboard/add-product" element={<ProtectedVendorRoute><AddProductView /></ProtectedVendorRoute>} />
+            <Route path="/dashboard/add-product/:step?" element={<ProtectedVendorRoute><AddProductView /></ProtectedVendorRoute>} />
+            <Route path="/dashboard/edit-product/:productId/:step?" element={<ProtectedVendorRoute><EditProductView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/orders" element={<ProtectedVendorRoute><VendorOrdersView /></ProtectedVendorRoute>} />
             <Route path="/dashboard/promo" element={<ProtectedVendorRoute><VendorPromoCodesView /></ProtectedVendorRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsView /></ProtectedRoute>} />
@@ -241,7 +243,7 @@ const AppRoutes: React.FC = () => {
           removeFromCart={removeFromCart}
           updateCartQuantity={updateCartQuantity}
         />
-        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+        {toast && <Toast message={toast} type={toastType} onClose={() => setToast(null)} />}
       </ErrorBoundary>
     </>
   );

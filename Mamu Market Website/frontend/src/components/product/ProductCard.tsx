@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Product } from '../../types';
-import { useSharedSponsoredProducts } from '../../context/DataContext';
+import { useSharedSponsoredProducts, useSharedVendors } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 
 const ProductCard: React.FC<{ 
@@ -20,7 +20,9 @@ const ProductCard: React.FC<{
   const { user } = useAuth();
   const activeUserRole = user?.role || userRole;
 
-  const resolvedVendorName = product.vendor || 'Unknown Vendor';
+  const { vendors } = useSharedVendors();
+  const matchedVendor = vendors.find(v => v.id === product.vendorId);
+  const resolvedVendorName = matchedVendor?.storeName || product.vendorName || product.vendor || 'Unknown Vendor';
 
   const handleColorClick = (e: React.MouseEvent, color: { name: string, image: string }) => {
     e.stopPropagation();

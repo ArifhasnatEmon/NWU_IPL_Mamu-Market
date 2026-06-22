@@ -270,7 +270,12 @@ const SettingsView: React.FC = () => {
     <div className="container mx-auto px-4 py-20">
       <PageTitle title="Account Settings" />
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-5xl font-black text-gray-900 tracking-tighter mb-4">Account Settings</h1>
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Account Settings</h1>
+          <button onClick={() => navigate(user?.role === 'vendor' ? '/dashboard' : '/')} className="text-gray-500 font-bold hover:text-gray-900 flex items-center gap-2">
+            <i className="fas fa-arrow-left text-sm"></i> {user?.role === 'vendor' ? 'Dashboard' : 'Home'}
+          </button>
+        </div>
         <p className="text-gray-400 font-medium mb-12">Manage your profile, security and preferences</p>
 
         {/* BENTO GRID */}

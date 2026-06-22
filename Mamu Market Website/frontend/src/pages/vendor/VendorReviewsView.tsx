@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import PageTitle from '../../components/PageTitle';
@@ -10,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 const VendorReviewsView: React.FC = () => {
   const { user } = useAuth();
   const { setToast } = useApp();
+  const navigate = useNavigate();
   const { reviews: fetchedReviews, loading } = useReviews({ vendorId: user?.id });
   const [replyModal, setReplyModal] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -68,9 +70,14 @@ const VendorReviewsView: React.FC = () => {
     <div className="container mx-auto px-4 py-12 lg:py-20">
       <PageTitle title="Customer Reviews" />
       <div className="max-w-6xl mx-auto">
-        <div className="mb-12">
-          <h1 className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter mb-4">Customer Reviews</h1>
-          <p className="text-xl text-gray-500 font-medium">Manage feedback, reply to customers, and track your product ratings.</p>
+        <div className="flex items-center justify-between mb-12">
+          <div>
+            <h1 className="text-4xl lg:text-5xl font-black text-gray-900 tracking-tighter mb-4">Customer Reviews</h1>
+            <p className="text-xl text-gray-500 font-medium">Manage feedback, reply to customers, and track your product ratings.</p>
+          </div>
+          <button onClick={() => navigate('/dashboard')} className="text-gray-500 font-bold hover:text-gray-900 flex items-center gap-2">
+            <i className="fas fa-arrow-left text-sm"></i> Dashboard
+          </button>
         </div>
 
         {/* Overview Cards */}

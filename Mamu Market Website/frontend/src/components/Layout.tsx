@@ -243,10 +243,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isAuthPage = ['/user-login', '/user-signup', '/vendor-login', '/affiliate-program'].includes(location.pathname) ||
     ['/help-center', '/about', '/terms', '/privacy', '/return-policy', '/seller-policy', '/contact', '/vendor-support', '/reset-password', '/update-password'].includes(location.pathname);
 
+  const isMinimalLayout = isAuthPage ||
+    location.pathname.startsWith('/dashboard') ||
+    location.pathname.startsWith('/checkout') ||
+    location.pathname.startsWith('/payment') ||
+    location.pathname === '/messages' ||
+    location.pathname === '/settings' ||
+    location.pathname === '/settings/store';
+
+  const hideFooter = isAuthPage ||
+    (location.pathname.startsWith('/dashboard/') && location.pathname !== '/dashboard') ||
+    location.pathname.startsWith('/checkout') ||
+    location.pathname.startsWith('/payment') ||
+    location.pathname === '/messages';
+
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-brand-100 selection:text-brand-600 bg-[#F5F5F8]">
       {/* Top Banner */}
-      {!isAuthPage && (
+      {!isMinimalLayout && (
         <motion.div
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -305,7 +319,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       )}
 
       {/* Navigation */}
-      {!isAuthPage && (
+      {!isMinimalLayout && (
         <nav className={`sticky top-0 z-50 w-full transition-all duration-0 ${scrolled ? 'glass shadow-lg py-2' : 'bg-[#F5F5F8] border-b border-gray-100 py-4'}`}>
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between gap-8">
@@ -573,7 +587,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       )}
 
       {/* Secondary Nav — separate sticky bar below main nav */}
-      {!isAuthPage && (
+      {!isMinimalLayout && (
         <div className={`hidden lg:block sticky z-40 bg-white border-b border-gray-100 shadow-sm transition-all`} style={{ top: scrolled ? '64px' : '80px' }}>
           <div className="container mx-auto px-4">
             <nav className="flex items-center gap-10 py-3 relative">
@@ -765,7 +779,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* Footer */}
-      {!isAuthPage && (
+      {!hideFooter && (
         <footer className="bg-[#111827] text-white pt-20 pb-10">
           <div className="container mx-auto px-4">
             <div className={user?.role === 'vendor' ? 'flex flex-col lg:flex-row gap-x-16 gap-y-12 mb-16' : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-x-8 gap-y-12 mb-16'}>

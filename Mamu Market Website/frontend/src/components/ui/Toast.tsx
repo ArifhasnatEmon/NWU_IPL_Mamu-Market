@@ -10,13 +10,13 @@ const ERROR_KEYWORDS = [
   'unauthorized'
 ];
 
-const Toast: React.FC<{ message: string, onClose: () => void }> = ({ message, onClose }) => {
+const Toast: React.FC<{ message: string, type?: 'success' | 'error' | 'info', onClose: () => void }> = ({ message, type = 'success', onClose }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
-  const isError = ERROR_KEYWORDS.some(k => message.toLowerCase().includes(k));
+  const isError = type === 'error';
 
   return (
     <AnimatePresence>

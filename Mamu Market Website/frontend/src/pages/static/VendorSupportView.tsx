@@ -428,7 +428,7 @@ const VendorSupportView: React.FC = () => {
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { icon: 'fa-clock', title: 'Priority Queue', desc: 'Fast track for vendors' },
-            { icon: 'fa-envelope', title: 'Partner Email', desc: 'partners@mamumarket.com' },
+            { icon: 'fa-envelope', title: 'Partner Email', desc: 'admin.mamumarket@gmail.com' },
             { icon: 'fa-calendar-check', title: 'Coverage', desc: '24/7 Dedicated Support' },
           ].map((item, i) => (
             <div key={i} className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-sm border border-gray-50">

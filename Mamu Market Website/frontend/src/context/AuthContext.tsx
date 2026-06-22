@@ -289,6 +289,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.auth.signOut();
           return { success: false, error: 'This account is not a vendor account.' };
         }
+        if (role === 'customer' && profile.role === 'vendor') {
+          await supabase.auth.signOut();
+          return { success: false, error: 'Please use the Merchant Portal to log in.' };
+        }
         setUser(profile);
         return { success: true, user: profile };
       }
@@ -383,6 +387,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const handleLogout = async () => {
+    // Sweep all per-user cache entries BEFORE signing out so that:
+    // (a) any in-flight fetches that resolve after signOut won't re-populate them,
+    // (b) the next user who logs in never sees a previous session's stale data.
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.startsWith('mm_vp_') ||
+          key.startsWith('mm_orders_')
+        )) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch {}
+
     await supabase.auth.signOut();
     setUser(null);
     window.dispatchEvent(new CustomEvent('auth:logout'));

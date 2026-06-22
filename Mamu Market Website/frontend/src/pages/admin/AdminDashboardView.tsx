@@ -18,6 +18,7 @@ import { useVendorRequests } from '../../hooks/useVendorRequests';
 
 import { useSupportTickets } from '../../hooks/useSupport';
 import { usePromoCodes } from '../../hooks/useMarketing';
+import { useRealtimeSubscription } from '../../hooks/useRealtimeSubscription';
 import { supabase } from '../../lib/supabase';
 
 const AdminDashboardView: React.FC = () => {
@@ -63,8 +64,12 @@ const AdminDashboardView: React.FC = () => {
     await rebuildData();
   };
 
+  // Keep rebuildData fresh in a ref for realtime callbacks without closure staleness
+  const rebuildRef = React.useRef<() => Promise<void>>(async () => {});
+
   // Build admin data whenever requests or other dependencies update
   const rebuildData = async () => {
+
     let uniqueUsers: any[] = [];
     try {
       const { data: profs, error } = await supabase.from('profiles').select('*');
@@ -158,6 +163,10 @@ const AdminDashboardView: React.FC = () => {
   };
 
   useEffect(() => {
+    rebuildRef.current = rebuildData;
+  });
+
+  useEffect(() => {
     rebuildData();
   }, []);
 
@@ -165,6 +174,17 @@ const AdminDashboardView: React.FC = () => {
   useEffect(() => {
     rebuildData();
   }, [requests]);
+
+  // Handle realtime events from tables that AdminDashboardView manually queries
+  const handleRealtimeEvent = React.useCallback(() => {
+    rebuildRef.current();
+  }, []);
+
+  useRealtimeSubscription({ table: 'profiles', channelName: 'rt-admin-profiles', onEvent: handleRealtimeEvent });
+  useRealtimeSubscription({ table: 'products', channelName: 'rt-admin-products', onEvent: handleRealtimeEvent });
+  useRealtimeSubscription({ table: 'product_updates', channelName: 'rt-admin-updates', onEvent: handleRealtimeEvent });
+  useRealtimeSubscription({ table: 'reported_reviews', channelName: 'rt-admin-reported-reviews', onEvent: handleRealtimeEvent });
+  useRealtimeSubscription({ table: 'reported_products', channelName: 'rt-admin-reported-products', onEvent: handleRealtimeEvent });
 
   useEffect(() => {
     if (toast) {

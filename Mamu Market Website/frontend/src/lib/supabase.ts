@@ -39,6 +39,43 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     fetch: fetchWithRetry as any,
   },
   realtime: {
+    // Send a WebSocket heartbeat every 15s (Supabase default).
+    // We ALSO run our own keep-alive ping every 25s (see below) to prevent
+    // the free-tier proxy from dropping idle connections after ~60s.
     heartbeatIntervalMs: 15000,
   },
 });
+
+// ── Keep-alive ping ────────────────────────────────────────────────────────
+// Supabase free-tier terminates WebSocket connections that carry no
+// application-level traffic for ~60 seconds. When the WS drops, the
+// underlying HTTP socket pool can also stall, causing REST fetches (like
+// the Add Product insert) to hang silently rather than fail fast.
+//
+// Every 25 seconds we create a throw-away channel, subscribe, then
+// immediately remove it. This costs one WS frame and keeps the connection
+// alive without any realtime subscriptions leaking.
+(function startKeepAlive() {
+  const INTERVAL_MS = 25_000;
+
+  const ping = () => {
+    try {
+      const ch = supabase.channel('__keepalive__');
+      ch.subscribe((status) => {
+        // Remove the channel as soon as it's up — we only need the ping.
+        if (status === 'SUBSCRIBED' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          supabase.removeChannel(ch);
+        }
+      });
+    } catch {
+      // Silently ignore — the next ping will try again.
+    }
+  };
+
+  // Start after a short delay so the client is fully initialised.
+  setTimeout(() => {
+    ping();
+    setInterval(ping, INTERVAL_MS);
+  }, 5000);
+})();
+

@@ -16,7 +16,8 @@ interface RecentlyViewedItem {
 
 interface AppContextValue {
   toast: string | null;
-  setToast: (msg: string | null) => void;
+  toastType: 'success' | 'error' | 'info';
+  setToast: (msg: string | null, type?: 'success' | 'error' | 'info') => void;
   wishlist: string[];
   setWishlist: React.Dispatch<React.SetStateAction<string[]>>;
   handleToggleWishlist: (productId: string) => void;
@@ -52,7 +53,24 @@ function saveLocalWishlist(ids: string[]) {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToastState] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
+
+  const setToast = useCallback((msg: string | null, type?: 'success' | 'error' | 'info') => {
+    if (!msg) {
+      setToastState(null);
+      return;
+    }
+    setToastState(msg);
+    if (type) {
+      setToastType(type);
+    } else {
+      const ERROR_KEYWORDS = ['invalid', 'incorrect', 'wrong', 'failed', 'error', 'denied', 'rejected', 'not found', 'already registered', 'cannot', 'pending', 'please sign in', 'please use', 'not a merchant', 'out of stock', 'please fill', 'please add', 'please upload', 'please select', 'storage limit', 'exceeded', 'too many', 'please wait', 'suspended', 'unauthorized', 'must', 'required'];
+      const isError = ERROR_KEYWORDS.some(k => msg.toLowerCase().includes(k));
+      setToastType(isError ? 'error' : 'success');
+    }
+  }, []);
+
   const [wishlist, setWishlist] = useState<string[]>(loadLocalWishlist);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const wishlistSyncedRef = useRef(false);
@@ -235,7 +253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      toast, setToast,
+      toast, toastType, setToast,
       wishlist, setWishlist,
       handleToggleWishlist,
       wishlistLoading,

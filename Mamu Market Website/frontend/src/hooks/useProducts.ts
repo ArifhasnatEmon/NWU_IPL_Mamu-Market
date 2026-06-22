@@ -4,6 +4,18 @@ import { supabase } from '../lib/supabase';
 import { mapProduct } from '../lib/dbMappers';
 import { useRealtimeSubscription } from './useRealtimeSubscription';
 
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+function isCacheValid(tsKey: string): boolean {
+  try {
+    const ts = localStorage.getItem(tsKey);
+    if (!ts) return false;
+    return Date.now() - parseInt(ts, 10) < CACHE_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
 export function useApprovedProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,26 +162,42 @@ export function useProduct(id?: string) {
 
 export function useVendorProducts(vendorId?: string) {
   const cacheKey = `mm_vp_${vendorId}`;
+  const tsKey   = `mm_vp_${vendorId}_ts`;
+
+  // Only seed from cache when the TTL is still valid — otherwise start empty
+  // so the page shows a proper loading state instead of stale data.
+  const cacheValid = vendorId ? isCacheValid(tsKey) : false;
+
   const [products, setProducts] = useState<Product[]>(() => {
-    if (!vendorId) return [];
+    if (!vendorId || !cacheValid) return [];
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) return JSON.parse(cached);
     } catch {}
     return [];
   });
-  const [loading, setLoading] = useState(() => {
-    if (!vendorId) return false;
-    return !localStorage.getItem(cacheKey);
-  });
+
+  // loading = true on mount whenever there is no valid cache, so the UI
+  // always shows a spinner rather than stale data from a previous session.
+  const [loading, setLoading] = useState<boolean>(
+    !!vendorId && !cacheValid
+  );
+
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchProducts = async () => {
+  // abortedRef lets in-flight fetches detect they've been superseded
+  // (vendorId changed or component unmounted) and skip the localStorage write.
+  const abortedRef = useRef(false);
+
+  const fetchProducts = useCallback(async () => {
     if (!vendorId) {
       setProducts([]);
       setLoading(false);
       return;
     }
+
+    setLoading(true);
+    abortedRef.current = false;
 
     try {
       const { data, error: dbErr } = await supabase
@@ -181,20 +209,33 @@ export function useVendorProducts(vendorId?: string) {
       if (dbErr) throw dbErr;
 
       const mapped = (data || []).map(mapProduct);
-      setProducts(mapped);
-      localStorage.setItem(cacheKey, JSON.stringify(mapped));
-      setError(null);
+
+      if (!abortedRef.current) {
+        setProducts(mapped);
+        // Write back to cache only while the session is still valid
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(mapped));
+          localStorage.setItem(tsKey, String(Date.now()));
+        } catch {}
+        setError(null);
+      }
     } catch (err) {
       console.error('useVendorProducts error:', err);
-      setError(err as Error);
+      if (!abortedRef.current) setError(err as Error);
     } finally {
-      setLoading(false);
+      if (!abortedRef.current) setLoading(false);
     }
-  };
+  }, [vendorId, cacheKey, tsKey]);
 
   useEffect(() => {
+    abortedRef.current = false;
     fetchProducts();
-  }, [vendorId]);
+
+    return () => {
+      // Mark any in-flight fetch as aborted so it won't touch state or storage
+      abortedRef.current = true;
+    };
+  }, [fetchProducts]);
 
   // Realtime
   const fetchRef = useRef(fetchProducts);
