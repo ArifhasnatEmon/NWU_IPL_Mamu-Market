@@ -240,22 +240,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   };
 
-  const isAuthPage = ['/user-login', '/user-signup', '/vendor-login', '/affiliate-program'].includes(location.pathname) ||
-    ['/help-center', '/about', '/terms', '/privacy', '/return-policy', '/seller-policy', '/contact', '/vendor-support', '/reset-password', '/update-password'].includes(location.pathname);
+  const isAuthPage = ['/user-login', '/user-signup', '/vendor-login', '/reset-password', '/update-password'].includes(location.pathname);
 
-  const isMinimalLayout = isAuthPage ||
-    location.pathname.startsWith('/dashboard') ||
+  const isAppHeaderPage = location.pathname.startsWith('/dashboard') || 
+    location.pathname.startsWith('/settings') || 
     location.pathname.startsWith('/checkout') ||
     location.pathname.startsWith('/payment') ||
-    location.pathname === '/messages' ||
-    location.pathname === '/settings' ||
-    location.pathname === '/settings/store';
+    ['/help-center', '/vendor-support', '/affiliate-program', '/messages', '/about', '/terms', '/privacy', '/return-policy', '/seller-policy', '/contact'].includes(location.pathname);
 
-  const hideFooter = isAuthPage ||
-    (location.pathname.startsWith('/dashboard/') && location.pathname !== '/dashboard') ||
-    location.pathname.startsWith('/checkout') ||
-    location.pathname.startsWith('/payment') ||
-    location.pathname === '/messages';
+  const isMinimalLayout = isAuthPage || isAppHeaderPage;
+
+  const hideFooter = isAuthPage || (isAppHeaderPage && location.pathname !== '/dashboard');
 
   return (
     <div className="min-h-screen flex flex-col font-sans selection:bg-brand-100 selection:text-brand-600 bg-[#F5F5F8]">
@@ -316,6 +311,60 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </div>
         </motion.div>
+      )}
+
+      {/* Dark App Header (for Dashboard, Settings, Help) */}
+      {isAppHeaderPage && (
+        <div className="bg-[#111827] text-white py-4 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-50 shadow-md">
+           <button onClick={() => navigate('/')} className="flex items-center gap-3 group">
+              <div className="w-8 h-8 gradient-primary rounded-lg flex items-center justify-center text-white shadow-lg">
+                <i className="fas fa-store text-xs"></i>
+              </div>
+              <div className="flex flex-col text-left hidden sm:flex">
+                 <span className="text-lg font-black tracking-tighter text-white group-hover:text-brand-300 transition-colors leading-none">Mamu</span>
+                 <span className="text-[8px] font-black text-brand-400 tracking-[0.3em] uppercase leading-none mt-0.5">Market</span>
+              </div>
+           </button>
+
+           <div className="flex items-center gap-4 sm:gap-6">
+              {user?.role === 'vendor' ? (
+                <>
+                  <button onClick={() => navigate('/dashboard')} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">
+                    Dashboard
+                  </button>
+                  <button onClick={() => navigate('/settings/store')} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors hidden sm:block">
+                    Settings
+                  </button>
+                </>
+              ) : (
+                <>
+                  {user && (
+                    <button onClick={() => navigate('/orders')} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors hidden sm:block">
+                      My Orders
+                    </button>
+                  )}
+                  <button onClick={() => navigate('/help-center')} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">
+                    Support
+                  </button>
+                </>
+              )}
+              
+              <div className="w-px h-4 bg-gray-700"></div>
+              
+              {user ? (
+                <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/settings')}>
+                   <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center border border-gray-700 overflow-hidden group-hover:border-brand-500 transition-colors">
+                     {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <i className="fas fa-user text-xs text-gray-400"></i>}
+                   </div>
+                   <span className="text-sm font-bold text-gray-300 hidden sm:block group-hover:text-white transition-colors">{user?.role === 'vendor' ? (user?.storeName || user?.name || 'Vendor') : (user?.name || 'Customer')}</span>
+                </div>
+              ) : (
+                <button onClick={() => navigate('/user-login')} className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-brand-400 hover:text-brand-300 transition-colors">
+                  Sign In
+                </button>
+              )}
+           </div>
+        </div>
       )}
 
       {/* Navigation */}
