@@ -9,6 +9,7 @@ import { useApp } from '../../context/AppContext';
 import { uploadImage } from '../../utils/imageUpload';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import { supabase } from '../../lib/supabase';
+import { compressImageFile } from '../../utils/fileHelpers';
 
 const SettingsView: React.FC = () => {
   const { user, setUser } = useAuth();
@@ -54,12 +55,15 @@ const SettingsView: React.FC = () => {
   const [upImg, setUpImg] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const onSelectFile = (file: File) => {
+  const onSelectFile = async (file: File) => {
     if (!file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.addEventListener('load', () => setUpImg(reader.result as string));
-    reader.readAsDataURL(file);
-    setCropModalOpen(true);
+    try {
+      const compressedDataUrl = await compressImageFile(file);
+      setUpImg(compressedDataUrl);
+      setCropModalOpen(true);
+    } catch (err) {
+      setToast('Failed to load image');
+    }
   };
 
   const handleSaveProfile = async () => {

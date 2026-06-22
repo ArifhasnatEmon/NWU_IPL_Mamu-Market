@@ -65,61 +65,68 @@ const HomeView: React.FC = () => {
                 }}
                 className="absolute inset-0 w-full h-full"
               >
-                <div className="absolute inset-0 z-10" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.10) 100%)' }}></div>
-                
                 <motion.img 
                   initial={{ scale: 1.05 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 2, ease: "easeOut" }}
                   src={slides[slide].image || slides[slide].img || 'https://via.placeholder.com/1920x1080?text=Mamu+Market'} 
                   referrerPolicy="no-referrer" 
-                  className="absolute inset-0 w-full h-full object-cover" 
+                  className={`absolute inset-0 w-full h-full object-cover ${!(slides[slide].title || slides[slide].subtitle || slides[slide].sub) ? 'cursor-pointer' : ''}`} 
                   alt="Hero" 
+                  onClick={() => {
+                    if (!(slides[slide].title || slides[slide].subtitle || slides[slide].sub)) {
+                      navigate(slides[slide].buttonLink || '/products');
+                    }
+                  }}
                 />
 
-                <div className="relative z-20 h-full flex flex-col justify-center pl-12 pr-6 sm:pl-16 sm:pr-8 lg:pl-20 lg:pr-12 max-w-sm sm:max-w-md lg:max-w-2xl">
-                  {(slides[slide].badge === undefined ? true : !!slides[slide].badge) && (
-                    <motion.span 
-                      initial={{ opacity: 0, y: 30 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5, duration: 0.8 }}
-                      className="bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] px-5 sm:px-6 py-2 sm:py-2.5 rounded-full w-fit mb-6 shadow-2xl shadow-black/20"
-                    >
-                      {slides[slide].badge !== undefined ? slides[slide].badge : 'New Season Arrival'}
-                    </motion.span>
-                  )}
-                  <motion.h1 
-                    initial={{ opacity: 0, y: 50, filter: 'blur(10px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{ delay: 0.7, duration: 0.8 }}
-                    className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight text-balance drop-shadow-2xl"
-                    style={{ textShadow: '0 4px 30px rgba(0,0,0,0.6)' }}
-                  >
-                    {slides[slide].title}
-                  </motion.h1>
-                  <motion.p 
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.9, duration: 0.8 }}
-                    className="text-lg sm:text-xl lg:text-2xl text-white/95 mb-10 max-w-xl font-medium leading-relaxed text-balance drop-shadow-lg"
-                    style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
-                  >
-                    {slides[slide].subtitle || slides[slide].sub}
-                  </motion.p>
-                  <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.1, duration: 0.8 }}
-                    className="flex flex-wrap gap-6"
-                  >
-                      <button 
-                        onClick={() => navigate(slides[slide].buttonLink || '/products')} 
-                        className="px-8 sm:px-10 py-4 bg-white text-gray-900 rounded-full font-black text-base sm:text-lg hover:scale-105 active:scale-95 transition-all shadow-xl hover:shadow-2xl shadow-black/20 flex items-center gap-3"
+                <div className="absolute inset-0 z-10 pointer-events-none" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 45%, rgba(0,0,0,0.10) 100%)' }}></div>
+
+                {(slides[slide].title || slides[slide].subtitle || slides[slide].sub) && (
+                    <div className="relative z-20 h-full flex flex-col justify-center pl-12 pr-6 sm:pl-16 sm:pr-8 lg:pl-20 lg:pr-12 max-w-sm sm:max-w-md lg:max-w-2xl">
+                      {(slides[slide].badge === undefined ? true : !!slides[slide].badge) && (
+                        <motion.span 
+                          initial={{ opacity: 0, y: 30 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.5, duration: 0.8 }}
+                          className="bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] sm:text-xs font-black uppercase tracking-[0.3em] px-5 sm:px-6 py-2 sm:py-2.5 rounded-full w-fit mb-6 shadow-2xl shadow-black/20"
+                        >
+                          {slides[slide].badge !== undefined ? slides[slide].badge : 'New Season Arrival'}
+                        </motion.span>
+                      )}
+                      <motion.h1 
+                        initial={{ opacity: 0, y: 50, filter: 'blur(10px)' }}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        transition={{ delay: 0.7, duration: 0.8 }}
+                        className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-[1.05] tracking-tight text-balance drop-shadow-2xl"
+                        style={{ textShadow: '0 4px 30px rgba(0,0,0,0.6)' }}
                       >
-                        {slides[slide].buttonText || 'Explore Shop'} <i className="fas fa-arrow-right text-sm"></i>
-                      </button>
-                  </motion.div>
-                </div>
+                        {slides[slide].title}
+                      </motion.h1>
+                      <motion.p 
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.9, duration: 0.8 }}
+                        className="text-lg sm:text-xl lg:text-2xl text-white/95 mb-10 max-w-xl font-medium leading-relaxed text-balance drop-shadow-lg"
+                        style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}
+                      >
+                        {slides[slide].subtitle || slides[slide].sub}
+                      </motion.p>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 1.1, duration: 0.8 }}
+                        className="flex flex-wrap gap-6"
+                      >
+                          <button 
+                            onClick={() => navigate(slides[slide].buttonLink || '/products')} 
+                            className="px-8 sm:px-10 py-4 bg-white text-gray-900 rounded-full font-black text-base sm:text-lg hover:scale-105 active:scale-95 transition-all shadow-xl hover:shadow-2xl shadow-black/20 flex items-center gap-3"
+                          >
+                            {slides[slide].buttonText || 'Explore Shop'} <i className="fas fa-arrow-right text-sm"></i>
+                          </button>
+                      </motion.div>
+                    </div>
+                )}
               </motion.div>
             </AnimatePresence>
             
