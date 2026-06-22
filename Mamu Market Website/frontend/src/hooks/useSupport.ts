@@ -154,6 +154,8 @@ export const useSupportTickets = () => {
 
       if (from === 'admin' && ticket?.status === 'open') {
         updates.status = 'in-progress';
+      } else if (from === 'user' && ticket?.status !== 'open') {
+        updates.status = 'open';
       }
 
       const { error: dbErr } = await supabase

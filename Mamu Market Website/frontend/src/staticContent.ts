@@ -9,20 +9,6 @@ export const STATIC_CONTENT = {
           <p>Today, Mamu Market is one of Bangladesh's fastest-growing multi-vendor platforms, connecting buyers and sellers across the country with everything from fashion and electronics to handcrafts and home goods — all in one place.</p>
         </section>
 
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 my-12">
-          <div class="p-8 bg-grad-soft rounded-2xl border border-brand-100 text-center">
-            <div class="text-3xl font-black text-brand-600 mb-2">500+</div>
-            <div class="text-xs font-black uppercase tracking-widest text-gray-400">Vendors</div>
-          </div>
-          <div class="p-8 bg-grad-soft rounded-2xl border border-brand-100 text-center">
-            <div class="text-3xl font-black text-brand-600 mb-2">10,000+</div>
-            <div class="text-xs font-black uppercase tracking-widest text-gray-400">Products Listed</div>
-          </div>
-          <div class="p-8 bg-grad-soft rounded-2xl border border-brand-100 text-center">
-            <div class="text-3xl font-black text-brand-600 mb-2">50,000+</div>
-            <div class="text-xs font-black uppercase tracking-widest text-gray-400">Happy Customers</div>
-          </div>
-        </section>
 
         <section>
           <h2 class="text-gradient">Our Mission</h2>
