@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { uploadImage, uploadImages } from '../../utils/imageUpload';
+import { compressImageFile } from '../../utils/fileHelpers';
 import { useSharedCategories } from '../../context/DataContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import ImageCropperModal from '../../components/ui/ImageCropperModal';
@@ -90,19 +91,20 @@ const AddProductView: React.FC = () => {
 
   const compressableFields = ['mainImage', 'extraImage1', 'extraImage2', 'extraImage3', 'color1image', 'color2image', 'color3image', 'color4image'];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
+    try {
+      const compressedDataUrl = await compressImageFile(file);
       if (compressableFields.includes(currentField)) {
-        setUpImg(ev.target?.result as string);
+        setUpImg(compressedDataUrl);
         setCropModalOpen(true);
       } else {
-        setForm(prev => ({ ...prev, [currentField]: ev.target?.result as string }));
+        setForm(prev => ({ ...prev, [currentField]: compressedDataUrl }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setToast('Failed to load image', 'error');
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 

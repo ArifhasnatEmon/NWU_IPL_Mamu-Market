@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import PageTitle from '../../components/PageTitle';
 import { useApp } from '../../context/AppContext';
 import { uploadImage, uploadImages } from '../../utils/imageUpload';
+import { compressImageFile } from '../../utils/fileHelpers';
 import { useSharedCategories, useSharedProducts } from '../../context/DataContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import ImageCropperModal from '../../components/ui/ImageCropperModal';
@@ -155,19 +156,20 @@ const EditProductView: React.FC = () => {
 
   const compressableFields = ['mainImage', 'extraImage1', 'extraImage2', 'extraImage3', 'color1image', 'color2image', 'color3image', 'color4image'];
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
+    try {
+      const compressedDataUrl = await compressImageFile(file);
       if (compressableFields.includes(currentField)) {
-        setUpImg(ev.target?.result as string);
+        setUpImg(compressedDataUrl);
         setCropModalOpen(true);
       } else {
-        setForm(prev => ({ ...prev, [currentField]: ev.target?.result as string }));
+        setForm(prev => ({ ...prev, [currentField]: compressedDataUrl }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setToast('Failed to load image', 'error');
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -311,20 +313,29 @@ const EditProductView: React.FC = () => {
       }
 
       if (hasApprovalChanges) {
-        const { data: existingPending } = await supabase
+        const { data: existingPendingList } = await supabase
           .from('product_updates')
           .select('id')
           .eq('product_id', productId)
           .eq('status', 'pending')
-          .maybeSingle();
+          .limit(1);
 
-        if (existingPending) {
+        let updateSucceeded = false;
+        
+        if (existingPendingList && existingPendingList.length > 0) {
           const { error: updateApprovalErr } = await supabase
             .from('product_updates')
             .update({ changes })
-            .eq('id', existingPending.id);
-          if (updateApprovalErr) throw updateApprovalErr;
-        } else {
+            .eq('id', existingPendingList[0].id);
+            
+          if (!updateApprovalErr) {
+            updateSucceeded = true;
+          } else {
+            console.warn("Update failed (likely RLS), falling back to insert", updateApprovalErr);
+          }
+        }
+        
+        if (!updateSucceeded) {
           const { error: insertApprovalErr } = await supabase
             .from('product_updates')
             .insert({

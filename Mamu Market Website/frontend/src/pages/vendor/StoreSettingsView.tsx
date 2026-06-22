@@ -7,6 +7,7 @@ import { useApp } from '../../context/AppContext';
 import { useSharedCategories } from '../../context/DataContext';
 import { useVendorRequests } from '../../hooks/useVendorRequests';
 import { uploadImage } from '../../utils/imageUpload';
+import { compressImageFile } from '../../utils/fileHelpers';
 import { Category } from '../../types';
 import { supabase } from '../../lib/supabase';
 
@@ -270,15 +271,16 @@ const StoreSettingsView: React.FC = () => {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={e => {
+                  onChange={async e => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      setBannerUpImg(reader.result);
+                    try {
+                      const compressedDataUrl = await compressImageFile(file, 1920);
+                      setBannerUpImg(compressedDataUrl);
                       setBannerCropModalOpen(true);
-                    };
-                    reader.readAsDataURL(file);
+                    } catch (err) {
+                      setToast('Failed to load image');
+                    }
                     e.target.value = '';
                   }}
                 />

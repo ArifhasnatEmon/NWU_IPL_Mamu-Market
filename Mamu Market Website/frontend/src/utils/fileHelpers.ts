@@ -25,7 +25,7 @@ export function validateFileSize(file: File): { valid: boolean; error?: string }
  * Compresses an image file using an HTML5 Canvas and returns a base64 string.
  * Documents (PDF, etc) or unrecognized files are just returned as raw base64.
  */
-export function compressImageFile(file: File): Promise<string> {
+export function compressImageFile(file: File, customMaxDimension?: number): Promise<string> {
   return new Promise((resolve, reject) => {
     // If not an image, just read it as base64 without compression
     if (!file.type.startsWith('image/')) {
@@ -46,14 +46,15 @@ export function compressImageFile(file: File): Promise<string> {
       let width = img.width;
       let height = img.height;
 
+      const maxDim = customMaxDimension || MAX_IMAGE_DIMENSION;
       // Scale down if dimensions exceed maximum
-      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+      if (width > maxDim || height > maxDim) {
         if (width > height) {
-          height = Math.round((height * MAX_IMAGE_DIMENSION) / width);
-          width = MAX_IMAGE_DIMENSION;
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
         } else {
-          width = Math.round((width * MAX_IMAGE_DIMENSION) / height);
-          height = MAX_IMAGE_DIMENSION;
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
       }
 

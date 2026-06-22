@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { useGlobalSettings } from '../../../hooks/useMarketing';
 import ImageCropperModal from '../../ui/ImageCropperModal';
 import { uploadImage } from '../../../utils/imageUpload';
+import { compressImageFile } from '../../../utils/fileHelpers';
 import { getTimeLeft, computeExpiresAt, computeCustomExpiresAt, DURATION_PRESETS } from '../../../utils/expiry';
 
 interface HeroBannersTabProps {
@@ -87,15 +88,16 @@ const HeroBannersTab: React.FC<HeroBannersTabProps> = ({ setToast }) => {
     setToast(`Expiry set: ${days}d ${hours}h from now`);
   };
 
-  const handleImageUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setUpImg(reader.result);
+      try {
+        const compressedBase64 = await compressImageFile(e.target.files[0], 1920);
+        setUpImg(compressedBase64);
         setCurrentSlideId(id);
         setCropModalOpen(true);
-      });
-      reader.readAsDataURL(e.target.files[0]);
+      } catch (err) {
+        setToast('Failed to load image');
+      }
     }
     e.target.value = ''; // Reset input
   };
@@ -136,7 +138,7 @@ const HeroBannersTab: React.FC<HeroBannersTabProps> = ({ setToast }) => {
                   <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">Hero Image</label>
                   
                   {slide.image ? (
-                    <div className="rounded-xl overflow-hidden h-32 relative group bg-gray-100">
+                    <div className="rounded-xl overflow-hidden aspect-[21/9] relative group bg-gray-100">
                       <img src={slide.image} referrerPolicy="no-referrer" alt="preview" className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
                         <button 
@@ -288,7 +290,6 @@ const HeroBannersTab: React.FC<HeroBannersTabProps> = ({ setToast }) => {
       <ImageCropperModal
         isOpen={cropModalOpen}
         imageSrc={upImg}
-        aspect={1920 / 600} // Hero banner typical aspect
         title="Crop Hero Banner"
         onCancel={() => { setCropModalOpen(false); setUpImg(null); }}
         onCropComplete={(blobUrl) => {
